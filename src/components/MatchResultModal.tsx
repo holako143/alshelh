@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { RoomState, PlayerState } from '../shared/types';
 import { fireWinConfetti } from '../lib/confetti';
-import { Trophy, Share2, RotateCcw, Home, Check, Award, Target, Clock, Zap, Crown, Medal } from 'lucide-react';
+import { Trophy, Share2, Home, Check, Crown } from 'lucide-react';
 
 interface MatchResultModalProps {
   roomState: RoomState;
@@ -19,7 +19,6 @@ export const MatchResultModal: React.FC<MatchResultModalProps> = ({
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    // Fire celebratory confetti!
     try {
       fireWinConfetti();
     } catch {}
@@ -27,7 +26,6 @@ export const MatchResultModal: React.FC<MatchResultModalProps> = ({
 
   const players = Object.values(roomState.players) as PlayerState[];
 
-  // Sort players by total score (descending), rounds won, words solved
   const rankedPlayers = [...players].sort((a, b) => {
     if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
     if (b.roundsWon !== a.roundsWon) return b.roundsWon - a.roundsWon;
@@ -41,25 +39,29 @@ export const MatchResultModal: React.FC<MatchResultModalProps> = ({
 
   const isMeWinner = winner?.id === myPlayerId;
 
+  // Generate Wordle-like Emoji Matrix grid for sharing
+  const generateEmojiGrid = () => {
+    let gridText = `الوِرد — نتيجة مباراة ووردل العربية 🧠🔥\n`;
+    gridText += `النتيجة النهائية: ${winner?.nickname || 'المنافس'} بطلاً بـ ${winner?.totalScore || 0} نقطة!\n\n`;
+
+    roomState.roundSummaries.forEach((round) => {
+      gridText += `جولة ${round.roundNumber} (${round.secretWord}):\n`;
+      const myResult = round.playerResults[myPlayerId];
+      if (myResult) {
+        if (myResult.solved) {
+          gridText += `🟩 حلها من المحاولة ${myResult.attemptsUsed}\n`;
+        } else {
+          gridText += `⬛ لم يحلها (${myResult.attemptsUsed} محاولات)\n`;
+        }
+      }
+    });
+
+    gridText += `\nالعب الآن وحاد أصدقائك عبر الوِرد!`;
+    return gridText;
+  };
+
   const handleShare = () => {
-    let text = `الوِرد — ووردل العربية التنافسية (${rankedPlayers.length} لاعبين)\n`;
-    if (roomState.isDraw) {
-      text += `🤝 النتيجة: تعادل!\n`;
-    } else if (winner) {
-      text += `🏆 الفائز بالمركز الأول: ${winner.nickname} (${winner.totalScore} نقطة)\n`;
-    }
-
-    text += `\n📊 الترتيب النهائي:\n`;
-    rankedPlayers.forEach((p, idx) => {
-      const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`;
-      text += `${medal} ${p.nickname}: ${p.totalScore} نقطة (${p.roundsWon} جولات)\n`;
-    });
-
-    text += `\nالكلمات السرية للجولات:\n`;
-    roomState.roundSummaries.forEach((r) => {
-      text += `• الجولة ${r.roundNumber}: ${r.secretWord}\n`;
-    });
-
+    const text = generateEmojiGrid();
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -177,7 +179,7 @@ export const MatchResultModal: React.FC<MatchResultModalProps> = ({
             className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-white font-bold text-sm flex items-center justify-center gap-2 transition-transform active:scale-98 shadow-lg shadow-emerald-500/25 border border-white/20 cursor-pointer"
           >
             {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-            <span>{copied ? 'تم نسخ الترتيب!' : 'مشاركة النتيجة'}</span>
+            <span>{copied ? 'تم نسخ النتيجة Emoji Grid!' : 'نسخ نتيجة المباراة 🟩🟨'}</span>
           </button>
 
           <button

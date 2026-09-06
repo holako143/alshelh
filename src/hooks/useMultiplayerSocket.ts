@@ -5,7 +5,6 @@ import {
   WebSocketClientMessage,
   WebSocketServerMessage,
   TileState,
-  RoundSummary,
 } from '../shared/types';
 import { soundManager } from '../lib/audio';
 
@@ -38,7 +37,9 @@ export function useMultiplayerSocket(roomCode: string | null) {
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const graceIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const latestVersionRef = useRef<number>(0);
+  const isWsSupportedRef = useRef<boolean>(true);
 
   // Persistent Player ID and Session Token
   const getSessionCredentials = useCallback(() => {
@@ -58,11 +59,66 @@ export function useMultiplayerSocket(roomCode: string | null) {
     return { playerId, sessionToken, nickname };
   }, []);
 
-  const send = useCallback((message: WebSocketClientMessage) => {
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify(message));
+  // HTTP Fallback API sender for Vercel
+  const sendViaHttp = useCallback(
+    async (message: WebSocketClientMessage) => {
+      if (!roomCode) return;
+      const { playerId } = getSessionCredentials();
+      try {
+        const res = await fetch(`/api/rooms/${roomCode}/action`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId, message }),
+        });
+        const data = await res.json();
+        if (data.state && data.state.stateVersion >= latestVersionRef.current) {
+          latestVersionRef.current = data.state.stateVersion;
+          setRoomState(data.state);
+        }
+        if (data.error) {
+          setLastError(data.error);
+        }
+      } catch (err: any) {
+        console.warn('HTTP fallback action failed:', err);
+      }
+    },
+    [roomCode, getSessionCredentials]
+  );
+
+  const send = useCallback(
+    (message: WebSocketClientMessage) => {
+      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+        socketRef.current.send(JSON.stringify(message));
+      } else {
+        // Fallback to HTTP API
+        sendViaHttp(message);
+      }
+    },
+    [sendViaHttp]
+  );
+
+  // Poll room state via HTTP (crucial for Vercel Serverless environment)
+  const pollRoomState = useCallback(async () => {
+    if (!roomCode) return;
+    const { playerId } = getSessionCredentials();
+    try {
+      const res = await fetch(`/api/rooms/${roomCode}/state?playerId=${playerId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.state) {
+        if (data.state.stateVersion > latestVersionRef.current) {
+          latestVersionRef.current = data.state.stateVersion;
+          setRoomState(data.state);
+        } else if (!roomState) {
+          setRoomState(data.state);
+        }
+        setIsConnected(true);
+        setIsReconnecting(false);
+      }
+    } catch (err) {
+      console.warn('Polling state error:', err);
     }
-  }, []);
+  }, [roomCode, getSessionCredentials, roomState]);
 
   const connect = useCallback(() => {
     if (!roomCode) return;
@@ -73,264 +129,263 @@ export function useMultiplayerSocket(roomCode: string | null) {
       } catch {}
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws`;
+    // Try WebSocket connection first
+    try {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      const wsUrl = `${protocol}//${host}/ws`;
 
-    const ws = new WebSocket(wsUrl);
-    socketRef.current = ws;
+      const ws = new WebSocket(wsUrl);
+      socketRef.current = ws;
 
-    ws.onopen = () => {
-      setIsConnected(true);
-      setIsReconnecting(false);
-      setLastError(null);
+      ws.onopen = () => {
+        setIsConnected(true);
+        setIsReconnecting(false);
+        setLastError(null);
 
-      const { playerId, sessionToken, nickname } = getSessionCredentials();
+        const { playerId, sessionToken, nickname } = getSessionCredentials();
 
-      // Send JOIN_ROOM or RECONNECT
-      ws.send(
-        JSON.stringify({
-          type: 'JOIN_ROOM',
-          roomCode,
-          playerId,
-          nickname,
-          sessionToken,
-        } as WebSocketClientMessage)
-      );
-    };
+        ws.send(
+          JSON.stringify({
+            type: 'JOIN_ROOM',
+            roomCode,
+            playerId,
+            nickname,
+            sessionToken,
+          } as WebSocketClientMessage)
+        );
+      };
 
-    ws.onmessage = (event) => {
-      try {
-        const msg: WebSocketServerMessage = JSON.parse(event.data);
+      ws.onmessage = (event) => {
+        try {
+          const msg: WebSocketServerMessage = JSON.parse(event.data);
 
-        switch (msg.type) {
-          case 'ROOM_STATE_SYNC': {
-            if (msg.state.stateVersion >= latestVersionRef.current) {
-              latestVersionRef.current = msg.state.stateVersion;
-              setRoomState(msg.state);
-            }
-            break;
-          }
-
-          case 'COUNTDOWN_STARTED': {
-            soundManager.playCountdownTick();
-            setRoomState((prev) => {
-              if (!prev) return null;
-              return { ...prev, status: 'COUNTDOWN', countdownEndsAt: msg.endsAt };
-            });
-            break;
-          }
-
-          case 'ROUND_STARTED': {
-            soundManager.playCountdownTick(true);
-            setSolveAnnouncement(null);
-            setEliminatedLetters([]);
-            setRoomState((prev) => {
-              if (!prev) return null;
-              if (msg.stateVersion < latestVersionRef.current) return prev;
-              latestVersionRef.current = msg.stateVersion;
-              return {
-                ...prev,
-                status: 'PLAYING',
-                currentRound: msg.roundNumber,
-                roundStartedAt: msg.roundStartedAt,
-                roundDurationMs: msg.roundDurationMs,
-                currentHint: msg.hint ?? prev.currentHint,
-                revealedWord: null,
-              };
-            });
-            break;
-          }
-
-          case 'JOKER_ACTIVATED': {
-            const { playerId: targetPlayerId, eliminatedLetters: newEliminated, jokersRemaining } = msg;
-            const { playerId } = getSessionCredentials();
-            if (targetPlayerId === playerId) {
-              soundManager.playJokerPowerUp();
-              setEliminatedLetters((prev) => Array.from(new Set([...prev, ...newEliminated])));
-            }
-            setRoomState((prev) => {
-              if (!prev) return null;
-              const copy = { ...prev };
-              if (copy.players[targetPlayerId]) {
-                copy.players[targetPlayerId].jokersRemaining = jokersRemaining;
+          switch (msg.type) {
+            case 'ROOM_STATE_SYNC': {
+              if (msg.state.stateVersion >= latestVersionRef.current) {
+                latestVersionRef.current = msg.state.stateVersion;
+                setRoomState(msg.state);
               }
-              return copy;
-            });
-            break;
-          }
-
-          case 'PLAYER_SOLVED_ROUND': {
-            const { playerId } = getSessionCredentials();
-            const isSelf = msg.playerId === playerId;
-
-            // If an opponent solved it, play sound alert so everyone is notified
-            if (!isSelf) {
-              soundManager.playRoundWin();
+              break;
             }
 
-            setSolveAnnouncement({
-              playerId: msg.playerId,
-              nickname: msg.nickname,
-              attemptsUsed: msg.attemptsUsed,
-              timeTakenMs: msg.timeTakenMs,
-              roundNumber: msg.roundNumber,
-              timestamp: msg.serverTimestamp,
-              isSelf,
-            });
-
-            // Auto dismiss after 7 seconds
-            setTimeout(() => {
-              setSolveAnnouncement((curr) => (curr?.timestamp === msg.serverTimestamp ? null : curr));
-            }, 7000);
-            break;
-          }
-
-          case 'GUESS_EVALUATED': {
-            soundManager.playGuessEvaluation(msg.evaluation);
-            if (msg.hasSolved) {
-              setTimeout(() => {
-                soundManager.playRoundWin();
-              }, 500);
-            } else if (msg.hasExhausted) {
-              setTimeout(() => {
-                soundManager.playRoundLoss();
-              }, 600);
+            case 'COUNTDOWN_STARTED': {
+              soundManager.playCountdownTick();
+              setRoomState((prev) => {
+                if (!prev) return null;
+                return { ...prev, status: 'COUNTDOWN', countdownEndsAt: msg.endsAt };
+              });
+              break;
             }
 
-            setLastEvaluation({
-              guess: msg.guess,
-              evaluation: msg.evaluation,
-              hasSolved: msg.hasSolved,
-              hasExhausted: msg.hasExhausted,
-            });
+            case 'ROUND_STARTED': {
+              soundManager.playCountdownTick(true);
+              setSolveAnnouncement(null);
+              setEliminatedLetters([]);
+              setRoomState((prev) => {
+                if (!prev) return null;
+                if (msg.stateVersion < latestVersionRef.current) return prev;
+                latestVersionRef.current = msg.stateVersion;
+                return {
+                  ...prev,
+                  status: 'PLAYING',
+                  currentRound: msg.roundNumber,
+                  roundStartedAt: msg.roundStartedAt,
+                  roundDurationMs: msg.roundDurationMs,
+                  currentHint: msg.hint ?? prev.currentHint,
+                  revealedWord: null,
+                };
+              });
+              break;
+            }
 
-            // Update local player guesses in state
-            setRoomState((prev) => {
-              if (!prev) return null;
-              const copy = { ...prev };
-              const player = copy.players[msg.playerId];
-              if (player) {
-                player.currentGuesses = [...player.currentGuesses, msg.guess];
-                player.currentEvaluations = [...player.currentEvaluations, msg.evaluation];
-                player.hasSolved = msg.hasSolved;
-                player.hasExhausted = msg.hasExhausted;
-              }
-              return copy;
-            });
-            break;
-          }
-
-          case 'OPPONENT_PROGRESS_UPDATE': {
-            // Update opponent state without revealing letters
-            setRoomState((prev) => {
-              if (!prev) return null;
-              const copy = { ...prev };
-              const opp = copy.players[msg.playerId];
-              if (opp) {
-                opp.hasSolved = msg.hasSolved;
-                opp.hasExhausted = msg.hasExhausted;
-                if (msg.lastGuessPattern) {
-                  opp.currentEvaluations = [...opp.currentEvaluations, msg.lastGuessPattern];
-                }
-              }
-              return copy;
-            });
-            break;
-          }
-
-          case 'ROUND_ENDED': {
-            if (msg.summary.winnerPlayerId) {
+            case 'JOKER_ACTIVATED': {
+              const { playerId: targetPlayerId, eliminatedLetters: newEliminated, jokersRemaining } = msg;
               const { playerId } = getSessionCredentials();
-              if (msg.summary.winnerPlayerId === playerId) {
-                soundManager.playRoundWin();
-              } else {
-                soundManager.playRoundLoss();
+              if (targetPlayerId === playerId) {
+                soundManager.playJokerPowerUp();
+                setEliminatedLetters((prev) => Array.from(new Set([...prev, ...newEliminated])));
               }
-            }
-            setRoomState((prev) => {
-              if (!prev) return null;
-              return {
-                ...prev,
-                status: 'ROUND_ENDING',
-                revealedWord: msg.revealedWord,
-                roundSummaries: [...prev.roundSummaries, msg.summary],
-                transitionEndsAt: Date.now() + msg.nextRoundInMs,
-              };
-            });
-            break;
-          }
-
-          case 'MATCH_FINISHED': {
-            const { playerId } = getSessionCredentials();
-            if (msg.finalState.matchWinnerId === playerId) {
-              soundManager.playMatchWin();
-            } else if (msg.finalState.isDraw) {
-              soundManager.playMatchLoss();
-            } else {
-              soundManager.playMatchLoss();
-            }
-            setRoomState(msg.finalState);
-            break;
-          }
-
-          case 'PLAYER_CONNECTION_CHANGED': {
-            const { playerId } = getSessionCredentials();
-            if (msg.playerId !== playerId) {
-              if (!msg.isConnected) {
-                setOpponentDisconnected(true);
-                if (msg.gracePeriodEndsAt) {
-                  const remaining = Math.max(0, Math.round((msg.gracePeriodEndsAt - Date.now()) / 1000));
-                  setGracePeriodRemaining(remaining);
-
-                  if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
-                  graceIntervalRef.current = setInterval(() => {
-                    setGracePeriodRemaining((prev) => {
-                      if (prev === null || prev <= 1) {
-                        if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
-                        return 0;
-                      }
-                      return prev - 1;
-                    });
-                  }, 1000);
+              setRoomState((prev) => {
+                if (!prev) return null;
+                const copy = { ...prev };
+                if (copy.players[targetPlayerId]) {
+                  copy.players[targetPlayerId].jokersRemaining = jokersRemaining;
                 }
-              } else {
-                setOpponentDisconnected(false);
-                setGracePeriodRemaining(null);
-                if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
-              }
+                return copy;
+              });
+              break;
             }
-            break;
-          }
 
-          case 'ERROR': {
-            setLastError(msg.message);
-            break;
+            case 'PLAYER_SOLVED_ROUND': {
+              const { playerId } = getSessionCredentials();
+              const isSelf = msg.playerId === playerId;
+
+              if (!isSelf) {
+                soundManager.playRoundWin();
+              }
+
+              setSolveAnnouncement({
+                playerId: msg.playerId,
+                nickname: msg.nickname,
+                attemptsUsed: msg.attemptsUsed,
+                timeTakenMs: msg.timeTakenMs,
+                roundNumber: msg.roundNumber,
+                timestamp: msg.serverTimestamp,
+                isSelf,
+              });
+
+              setTimeout(() => {
+                setSolveAnnouncement((curr) => (curr?.timestamp === msg.serverTimestamp ? null : curr));
+              }, 7000);
+              break;
+            }
+
+            case 'GUESS_EVALUATED': {
+              soundManager.playGuessEvaluation(msg.evaluation);
+              if (msg.hasSolved) {
+                setTimeout(() => soundManager.playRoundWin(), 500);
+              } else if (msg.hasExhausted) {
+                setTimeout(() => soundManager.playRoundLoss(), 600);
+              }
+
+              setLastEvaluation({
+                guess: msg.guess,
+                evaluation: msg.evaluation,
+                hasSolved: msg.hasSolved,
+                hasExhausted: msg.hasExhausted,
+              });
+
+              setRoomState((prev) => {
+                if (!prev) return null;
+                const copy = { ...prev };
+                const player = copy.players[msg.playerId];
+                if (player) {
+                  player.currentGuesses = [...player.currentGuesses, msg.guess];
+                  player.currentEvaluations = [...player.currentEvaluations, msg.evaluation];
+                  player.hasSolved = msg.hasSolved;
+                  player.hasExhausted = msg.hasExhausted;
+                }
+                return copy;
+              });
+              break;
+            }
+
+            case 'OPPONENT_PROGRESS_UPDATE': {
+              setRoomState((prev) => {
+                if (!prev) return null;
+                const copy = { ...prev };
+                const opp = copy.players[msg.playerId];
+                if (opp) {
+                  opp.hasSolved = msg.hasSolved;
+                  opp.hasExhausted = msg.hasExhausted;
+                  if (msg.lastGuessPattern) {
+                    opp.currentEvaluations = [...opp.currentEvaluations, msg.lastGuessPattern];
+                  }
+                }
+                return copy;
+              });
+              break;
+            }
+
+            case 'ROUND_ENDED': {
+              if (msg.summary.winnerPlayerId) {
+                const { playerId } = getSessionCredentials();
+                if (msg.summary.winnerPlayerId === playerId) {
+                  soundManager.playRoundWin();
+                } else {
+                  soundManager.playRoundLoss();
+                }
+              }
+              setRoomState((prev) => {
+                if (!prev) return null;
+                return {
+                  ...prev,
+                  status: 'ROUND_ENDING',
+                  revealedWord: msg.revealedWord,
+                  roundSummaries: [...prev.roundSummaries, msg.summary],
+                  transitionEndsAt: Date.now() + msg.nextRoundInMs,
+                };
+              });
+              break;
+            }
+
+            case 'MATCH_FINISHED': {
+              const { playerId } = getSessionCredentials();
+              if (msg.finalState.matchWinnerId === playerId) {
+                soundManager.playMatchWin();
+              } else {
+                soundManager.playMatchLoss();
+              }
+              setRoomState(msg.finalState);
+              break;
+            }
+
+            case 'PLAYER_CONNECTION_CHANGED': {
+              const { playerId } = getSessionCredentials();
+              if (msg.playerId !== playerId) {
+                if (!msg.isConnected) {
+                  setOpponentDisconnected(true);
+                  if (msg.gracePeriodEndsAt) {
+                    const remaining = Math.max(0, Math.round((msg.gracePeriodEndsAt - Date.now()) / 1000));
+                    setGracePeriodRemaining(remaining);
+
+                    if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
+                    graceIntervalRef.current = setInterval(() => {
+                      setGracePeriodRemaining((prev) => {
+                        if (prev === null || prev <= 1) {
+                          if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
+                          return 0;
+                        }
+                        return prev - 1;
+                      });
+                    }, 1000);
+                  }
+                } else {
+                  setOpponentDisconnected(false);
+                  setGracePeriodRemaining(null);
+                  if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
+                }
+              }
+              break;
+            }
+
+            case 'ERROR': {
+              setLastError(msg.message);
+              break;
+            }
           }
+        } catch (err) {
+          console.error('Failed to parse server message:', err);
         }
-      } catch (err) {
-        console.error('Failed to parse server message:', err);
-      }
-    };
+      };
 
-    ws.onclose = () => {
-      setIsConnected(false);
-      setIsReconnecting(true);
-      // Auto-reconnect attempt
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = setTimeout(() => {
-        connect();
-      }, 2000);
-    };
+      ws.onclose = () => {
+        setIsConnected(false);
+        setIsReconnecting(true);
+        // Fall back to polling immediately when WS closes
+        pollRoomState();
+      };
 
-    ws.onerror = () => {
-      setIsConnected(false);
-    };
-  }, [roomCode, getSessionCredentials]);
+      ws.onerror = () => {
+        setIsConnected(false);
+        pollRoomState();
+      };
+    } catch {
+      isWsSupportedRef.current = false;
+    }
+
+    // Always fetch initial state & start polling fallback timer
+    pollRoomState();
+  }, [roomCode, getSessionCredentials, pollRoomState]);
 
   useEffect(() => {
     if (roomCode) {
       connect();
+      // Setup polling interval every 1.5s for seamless synchronization on serverless (Vercel)
+      pollingIntervalRef.current = setInterval(() => {
+        pollRoomState();
+      }, 1500);
     }
 
     return () => {
@@ -341,8 +396,9 @@ export function useMultiplayerSocket(roomCode: string | null) {
       }
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
+      if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
     };
-  }, [roomCode, connect]);
+  }, [roomCode, connect, pollRoomState]);
 
   // Actions
   const toggleReady = useCallback(
@@ -398,7 +454,8 @@ export function useMultiplayerSocket(roomCode: string | null) {
       roomCode,
       playerId,
     });
-  }, [roomCode, getSessionCredentials, send]);
+    pollRoomState();
+  }, [roomCode, getSessionCredentials, send, pollRoomState]);
 
   const startMatch = useCallback(() => {
     if (!roomCode) return;

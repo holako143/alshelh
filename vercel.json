@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "routes": [
+    {
+      "src": "/api/rooms/create",
+      "dest": "/api/rooms/create.ts"
+    },
+    {
+      "src": "/api/rooms/(?<roomCode>[^/]+)/join",
+      "dest": "/api/rooms/[roomCode].ts?action=join"
+    },
+    {
+      "src": "/api/rooms/(?<roomCode>[^/]+)/action",
+      "dest": "/api/rooms/[roomCode].ts?action=action"
+    },
+    {
+      "src": "/api/rooms/(?<roomCode>[^/]+)/state",
+      "dest": "/api/rooms/[roomCode].ts"
+    },
+    {
+      "src": "/api/rooms/(?<roomCode>[^/]+)",
+      "dest": "/api/rooms/[roomCode].ts"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/health.ts"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}

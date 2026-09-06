@@ -27,6 +27,17 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Auto-join room if URL contains ?room=XXXXX
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlRoom = params.get('room');
+      if (urlRoom && urlRoom.length === 5) {
+        handleJoinRoom(urlRoom.toUpperCase());
+      }
+    }
+  }, []);
+
   // Synchronized server clock
   const { getServerNow } = useClockSync();
 
@@ -137,6 +148,9 @@ export default function App() {
     setActiveRoomCode(null);
     setView('lobby');
     setErrorMessage(null);
+    if (typeof window !== 'undefined' && window.history) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   };
 
   return (
