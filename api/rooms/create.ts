@@ -17,15 +17,15 @@ export default function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { hostId, nickname, sessionToken, settings } = req.body || {};
-  if (!hostId || !nickname || !sessionToken) {
-    return res.status(400).json({ error: 'البيانات غير مكتملة' });
-  }
-
   try {
+    const { hostId, nickname, sessionToken, settings } = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+    if (!hostId || !nickname || !sessionToken) {
+      return res.status(400).json({ error: 'البيانات غير مكتملة' });
+    }
+
     const result = roomManager.createRoom(hostId, nickname, sessionToken, settings);
     return res.status(200).json(result);
   } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'حدث خطأ في إنشاء الغرفة' });
+    return res.status(200).json({ error: 'حدث خطأ في معالجة طلب إنشاء الغرفة' });
   }
 }

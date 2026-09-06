@@ -27,6 +27,22 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Safe fetch helper to prevent JSON.parse syntax errors on HTML responses
+  const safeFetchJson = async (url: string, options?: RequestInit) => {
+    const res = await fetch(url, options);
+    const text = await res.text();
+    let data: any = {};
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error('تعذر التواصل مع الخادم، يرجى المحاولة لاحقاً');
+    }
+    if (!res.ok) {
+      throw new Error(data.error || 'حدث خطأ غير متوقع');
+    }
+    return data;
+  };
+
   // Auto-join room if URL contains ?room=XXXXX
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -85,7 +101,7 @@ export default function App() {
       localStorage.setItem('alwird_player_id', playerId);
       localStorage.setItem('alwird_session_token', sessionToken);
 
-      const res = await fetch('/api/rooms/create', {
+      const data = await safeFetchJson('/api/rooms/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -96,8 +112,7 @@ export default function App() {
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.roomCode) {
+      if (!data.roomCode) {
         throw new Error(data.error || 'تعذر إنشاء الغرفة');
       }
 
@@ -120,7 +135,7 @@ export default function App() {
       localStorage.setItem('alwird_player_id', playerId);
       localStorage.setItem('alwird_session_token', sessionToken);
 
-      const res = await fetch(`/api/rooms/${roomCode}/join`, {
+      const data = await safeFetchJson(`/api/rooms/${roomCode}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -130,8 +145,7 @@ export default function App() {
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.error || 'تعذر الانضمام للغرفة');
       }
 

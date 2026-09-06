@@ -13,16 +13,17 @@ export default function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  // Extract roomCode from query or url parameter
+  // Extract roomCode
   const roomCode = (req.query.roomCode || req.query.code || req.url?.split('/')?.[3])?.toString().toUpperCase();
 
   if (!roomCode) {
     return res.status(400).json({ error: 'كود الغرفة غير محدد' });
   }
 
+  const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+
   if (req.method === 'POST') {
-    // Action dispatch (action: 'join', 'action', etc.)
-    const { action, playerId, nickname, sessionToken, message } = req.body || {};
+    const { action, playerId, nickname, sessionToken, message } = body;
 
     if (action === 'join' || req.url.includes('/join')) {
       if (!playerId || !nickname || !sessionToken) {
@@ -36,7 +37,7 @@ export default function handler(req: any, res: any) {
     }
 
     if (action === 'action' || message) {
-      const msg = message || req.body;
+      const msg = message || body;
       const pId = playerId || msg?.playerId;
 
       if (!msg || !msg.type) {
@@ -76,7 +77,6 @@ export default function handler(req: any, res: any) {
       return res.status(200).json({ success: true, state: updatedState });
     }
 
-    // Default join fallback if POST with playerId & nickname
     if (playerId && nickname && sessionToken) {
       const result = roomManager.joinRoom(roomCode, playerId, nickname, sessionToken);
       if (!result.success) {

@@ -59,30 +59,42 @@ export function useMultiplayerSocket(roomCode: string | null) {
     return { playerId, sessionToken, nickname };
   }, []);
 
+  // Safe fetch helper for polling and action posts
+  const safeFetchJson = useCallback(async (url: string, options?: RequestInit) => {
+    try {
+      const res = await fetch(url, options);
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        return { error: 'تعذر التواصل مع الخادم' };
+      }
+      return data;
+    } catch (e) {
+      return { error: 'حدث خطأ في شبكة الاتصال' };
+    }
+  }, []);
+
   // HTTP Fallback API sender for Vercel
   const sendViaHttp = useCallback(
     async (message: WebSocketClientMessage) => {
       if (!roomCode) return;
       const { playerId } = getSessionCredentials();
-      try {
-        const res = await fetch(`/api/rooms/${roomCode}/action`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ playerId, message }),
-        });
-        const data = await res.json();
-        if (data.state && data.state.stateVersion >= latestVersionRef.current) {
-          latestVersionRef.current = data.state.stateVersion;
-          setRoomState(data.state);
-        }
-        if (data.error) {
-          setLastError(data.error);
-        }
-      } catch (err: any) {
-        console.warn('HTTP fallback action failed:', err);
+      const data = await safeFetchJson(`/api/rooms/${roomCode}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId, message }),
+      });
+      if (data.state && data.state.stateVersion >= latestVersionRef.current) {
+        latestVersionRef.current = data.state.stateVersion;
+        setRoomState(data.state);
+      }
+      if (data.error) {
+        setLastError(data.error);
       }
     },
-    [roomCode, getSessionCredentials]
+    [roomCode, getSessionCredentials, safeFetchJson]
   );
 
   const send = useCallback(
@@ -90,7 +102,7 @@ export function useMultiplayerSocket(roomCode: string | null) {
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
         socketRef.current.send(JSON.stringify(message));
       } else {
-        // Fallback to HTTP API
+        // Fallback to HTTP API safely
         sendViaHttp(message);
       }
     },
@@ -101,24 +113,18 @@ export function useMultiplayerSocket(roomCode: string | null) {
   const pollRoomState = useCallback(async () => {
     if (!roomCode) return;
     const { playerId } = getSessionCredentials();
-    try {
-      const res = await fetch(`/api/rooms/${roomCode}/state?playerId=${playerId}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.state) {
-        if (data.state.stateVersion > latestVersionRef.current) {
-          latestVersionRef.current = data.state.stateVersion;
-          setRoomState(data.state);
-        } else if (!roomState) {
-          setRoomState(data.state);
-        }
-        setIsConnected(true);
-        setIsReconnecting(false);
+    const data = await safeFetchJson(`/api/rooms/${roomCode}/state?playerId=${playerId}`);
+    if (data && data.state) {
+      if (data.state.stateVersion > latestVersionRef.current) {
+        latestVersionRef.current = data.state.stateVersion;
+        setRoomState(data.state);
+      } else if (!roomState) {
+        setRoomState(data.state);
       }
-    } catch (err) {
-      console.warn('Polling state error:', err);
+      setIsConnected(true);
+      setIsReconnecting(false);
     }
-  }, [roomCode, getSessionCredentials, roomState]);
+  }, [roomCode, getSessionCredentials, roomState, safeFetchJson]);
 
   const connect = useCallback(() => {
     if (!roomCode) return;
@@ -129,7 +135,6 @@ export function useMultiplayerSocket(roomCode: string | null) {
       } catch {}
     }
 
-    // Try WebSocket connection first
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.host;
@@ -363,7 +368,6 @@ export function useMultiplayerSocket(roomCode: string | null) {
       ws.onclose = () => {
         setIsConnected(false);
         setIsReconnecting(true);
-        // Fall back to polling immediately when WS closes
         pollRoomState();
       };
 
@@ -375,14 +379,12 @@ export function useMultiplayerSocket(roomCode: string | null) {
       isWsSupportedRef.current = false;
     }
 
-    // Always fetch initial state & start polling fallback timer
     pollRoomState();
   }, [roomCode, getSessionCredentials, pollRoomState]);
 
   useEffect(() => {
     if (roomCode) {
       connect();
-      // Setup polling interval every 1.5s for seamless synchronization on serverless (Vercel)
       pollingIntervalRef.current = setInterval(() => {
         pollRoomState();
       }, 1500);
