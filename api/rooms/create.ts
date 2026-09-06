@@ -22,6 +22,10 @@ export default function handler(req: any, res: any) {
     return res.status(400).json({ error: 'البيانات غير مكتملة' });
   }
 
-  const result = roomManager.createRoom(hostId, nickname, sessionToken, settings);
-  return res.status(200).json(result);
+  try {
+    const result = roomManager.createRoom(hostId, nickname, sessionToken, settings);
+    return res.status(200).json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'حدث خطأ في إنشاء الغرفة' });
+  }
 }
