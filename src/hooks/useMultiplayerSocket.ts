@@ -1,0 +1,458 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  RoomState,
+  PlayerState,
+  WebSocketClientMessage,
+  WebSocketServerMessage,
+  TileState,
+  RoundSummary,
+} from '../shared/types';
+import { soundManager } from '../lib/audio';
+
+export interface SolveAnnouncement {
+  playerId: string;
+  nickname: string;
+  attemptsUsed: number;
+  timeTakenMs: number;
+  roundNumber: number;
+  timestamp: number;
+  isSelf: boolean;
+}
+
+export function useMultiplayerSocket(roomCode: string | null) {
+  const [roomState, setRoomState] = useState<RoomState | null>(null);
+  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
+  const [opponentDisconnected, setOpponentDisconnected] = useState<boolean>(false);
+  const [gracePeriodRemaining, setGracePeriodRemaining] = useState<number | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [solveAnnouncement, setSolveAnnouncement] = useState<SolveAnnouncement | null>(null);
+  const [eliminatedLetters, setEliminatedLetters] = useState<string[]>([]);
+  const [lastEvaluation, setLastEvaluation] = useState<{
+    guess: string;
+    evaluation: TileState[];
+    hasSolved: boolean;
+    hasExhausted: boolean;
+  } | null>(null);
+
+  const socketRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const graceIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const latestVersionRef = useRef<number>(0);
+
+  // Persistent Player ID and Session Token
+  const getSessionCredentials = useCallback(() => {
+    let playerId = localStorage.getItem('alwird_player_id');
+    let sessionToken = localStorage.getItem('alwird_session_token');
+    let nickname = localStorage.getItem('alwird_nickname') || 'اللاعب';
+
+    if (!playerId) {
+      playerId = 'p_' + Math.random().toString(36).substring(2, 10);
+      localStorage.setItem('alwird_player_id', playerId);
+    }
+    if (!sessionToken) {
+      sessionToken = 'tok_' + Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('alwird_session_token', sessionToken);
+    }
+
+    return { playerId, sessionToken, nickname };
+  }, []);
+
+  const send = useCallback((message: WebSocketClientMessage) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify(message));
+    }
+  }, []);
+
+  const connect = useCallback(() => {
+    if (!roomCode) return;
+
+    if (socketRef.current) {
+      try {
+        socketRef.current.close();
+      } catch {}
+    }
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/ws`;
+
+    const ws = new WebSocket(wsUrl);
+    socketRef.current = ws;
+
+    ws.onopen = () => {
+      setIsConnected(true);
+      setIsReconnecting(false);
+      setLastError(null);
+
+      const { playerId, sessionToken, nickname } = getSessionCredentials();
+
+      // Send JOIN_ROOM or RECONNECT
+      ws.send(
+        JSON.stringify({
+          type: 'JOIN_ROOM',
+          roomCode,
+          playerId,
+          nickname,
+          sessionToken,
+        } as WebSocketClientMessage)
+      );
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg: WebSocketServerMessage = JSON.parse(event.data);
+
+        switch (msg.type) {
+          case 'ROOM_STATE_SYNC': {
+            if (msg.state.stateVersion >= latestVersionRef.current) {
+              latestVersionRef.current = msg.state.stateVersion;
+              setRoomState(msg.state);
+            }
+            break;
+          }
+
+          case 'COUNTDOWN_STARTED': {
+            soundManager.playCountdownTick();
+            setRoomState((prev) => {
+              if (!prev) return null;
+              return { ...prev, status: 'COUNTDOWN', countdownEndsAt: msg.endsAt };
+            });
+            break;
+          }
+
+          case 'ROUND_STARTED': {
+            soundManager.playCountdownTick(true);
+            setSolveAnnouncement(null);
+            setEliminatedLetters([]);
+            setRoomState((prev) => {
+              if (!prev) return null;
+              if (msg.stateVersion < latestVersionRef.current) return prev;
+              latestVersionRef.current = msg.stateVersion;
+              return {
+                ...prev,
+                status: 'PLAYING',
+                currentRound: msg.roundNumber,
+                roundStartedAt: msg.roundStartedAt,
+                roundDurationMs: msg.roundDurationMs,
+                currentHint: msg.hint ?? prev.currentHint,
+                revealedWord: null,
+              };
+            });
+            break;
+          }
+
+          case 'JOKER_ACTIVATED': {
+            const { playerId: targetPlayerId, eliminatedLetters: newEliminated, jokersRemaining } = msg;
+            const { playerId } = getSessionCredentials();
+            if (targetPlayerId === playerId) {
+              soundManager.playJokerPowerUp();
+              setEliminatedLetters((prev) => Array.from(new Set([...prev, ...newEliminated])));
+            }
+            setRoomState((prev) => {
+              if (!prev) return null;
+              const copy = { ...prev };
+              if (copy.players[targetPlayerId]) {
+                copy.players[targetPlayerId].jokersRemaining = jokersRemaining;
+              }
+              return copy;
+            });
+            break;
+          }
+
+          case 'PLAYER_SOLVED_ROUND': {
+            const { playerId } = getSessionCredentials();
+            const isSelf = msg.playerId === playerId;
+
+            // If an opponent solved it, play sound alert so everyone is notified
+            if (!isSelf) {
+              soundManager.playRoundWin();
+            }
+
+            setSolveAnnouncement({
+              playerId: msg.playerId,
+              nickname: msg.nickname,
+              attemptsUsed: msg.attemptsUsed,
+              timeTakenMs: msg.timeTakenMs,
+              roundNumber: msg.roundNumber,
+              timestamp: msg.serverTimestamp,
+              isSelf,
+            });
+
+            // Auto dismiss after 7 seconds
+            setTimeout(() => {
+              setSolveAnnouncement((curr) => (curr?.timestamp === msg.serverTimestamp ? null : curr));
+            }, 7000);
+            break;
+          }
+
+          case 'GUESS_EVALUATED': {
+            soundManager.playGuessEvaluation(msg.evaluation);
+            if (msg.hasSolved) {
+              setTimeout(() => {
+                soundManager.playRoundWin();
+              }, 500);
+            } else if (msg.hasExhausted) {
+              setTimeout(() => {
+                soundManager.playRoundLoss();
+              }, 600);
+            }
+
+            setLastEvaluation({
+              guess: msg.guess,
+              evaluation: msg.evaluation,
+              hasSolved: msg.hasSolved,
+              hasExhausted: msg.hasExhausted,
+            });
+
+            // Update local player guesses in state
+            setRoomState((prev) => {
+              if (!prev) return null;
+              const copy = { ...prev };
+              const player = copy.players[msg.playerId];
+              if (player) {
+                player.currentGuesses = [...player.currentGuesses, msg.guess];
+                player.currentEvaluations = [...player.currentEvaluations, msg.evaluation];
+                player.hasSolved = msg.hasSolved;
+                player.hasExhausted = msg.hasExhausted;
+              }
+              return copy;
+            });
+            break;
+          }
+
+          case 'OPPONENT_PROGRESS_UPDATE': {
+            // Update opponent state without revealing letters
+            setRoomState((prev) => {
+              if (!prev) return null;
+              const copy = { ...prev };
+              const opp = copy.players[msg.playerId];
+              if (opp) {
+                opp.hasSolved = msg.hasSolved;
+                opp.hasExhausted = msg.hasExhausted;
+                if (msg.lastGuessPattern) {
+                  opp.currentEvaluations = [...opp.currentEvaluations, msg.lastGuessPattern];
+                }
+              }
+              return copy;
+            });
+            break;
+          }
+
+          case 'ROUND_ENDED': {
+            if (msg.summary.winnerPlayerId) {
+              const { playerId } = getSessionCredentials();
+              if (msg.summary.winnerPlayerId === playerId) {
+                soundManager.playRoundWin();
+              } else {
+                soundManager.playRoundLoss();
+              }
+            }
+            setRoomState((prev) => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                status: 'ROUND_ENDING',
+                revealedWord: msg.revealedWord,
+                roundSummaries: [...prev.roundSummaries, msg.summary],
+                transitionEndsAt: Date.now() + msg.nextRoundInMs,
+              };
+            });
+            break;
+          }
+
+          case 'MATCH_FINISHED': {
+            const { playerId } = getSessionCredentials();
+            if (msg.finalState.matchWinnerId === playerId) {
+              soundManager.playMatchWin();
+            } else if (msg.finalState.isDraw) {
+              soundManager.playMatchLoss();
+            } else {
+              soundManager.playMatchLoss();
+            }
+            setRoomState(msg.finalState);
+            break;
+          }
+
+          case 'PLAYER_CONNECTION_CHANGED': {
+            const { playerId } = getSessionCredentials();
+            if (msg.playerId !== playerId) {
+              if (!msg.isConnected) {
+                setOpponentDisconnected(true);
+                if (msg.gracePeriodEndsAt) {
+                  const remaining = Math.max(0, Math.round((msg.gracePeriodEndsAt - Date.now()) / 1000));
+                  setGracePeriodRemaining(remaining);
+
+                  if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
+                  graceIntervalRef.current = setInterval(() => {
+                    setGracePeriodRemaining((prev) => {
+                      if (prev === null || prev <= 1) {
+                        if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
+                        return 0;
+                      }
+                      return prev - 1;
+                    });
+                  }, 1000);
+                }
+              } else {
+                setOpponentDisconnected(false);
+                setGracePeriodRemaining(null);
+                if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
+              }
+            }
+            break;
+          }
+
+          case 'ERROR': {
+            setLastError(msg.message);
+            break;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to parse server message:', err);
+      }
+    };
+
+    ws.onclose = () => {
+      setIsConnected(false);
+      setIsReconnecting(true);
+      // Auto-reconnect attempt
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = setTimeout(() => {
+        connect();
+      }, 2000);
+    };
+
+    ws.onerror = () => {
+      setIsConnected(false);
+    };
+  }, [roomCode, getSessionCredentials]);
+
+  useEffect(() => {
+    if (roomCode) {
+      connect();
+    }
+
+    return () => {
+      if (socketRef.current) {
+        try {
+          socketRef.current.close();
+        } catch {}
+      }
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
+    };
+  }, [roomCode, connect]);
+
+  // Actions
+  const toggleReady = useCallback(
+    (isReady: boolean) => {
+      if (!roomCode) return;
+      const { playerId } = getSessionCredentials();
+      send({
+        type: 'TOGGLE_READY',
+        roomCode,
+        playerId,
+        isReady,
+      });
+    },
+    [roomCode, getSessionCredentials, send]
+  );
+
+  const submitGuess = useCallback(
+    (guess: string, roundNumber: number) => {
+      if (!roomCode) return;
+      const { playerId } = getSessionCredentials();
+      const clientActionId = 'act_' + Math.random().toString(36).substring(2, 9);
+      send({
+        type: 'SUBMIT_GUESS',
+        roomCode,
+        playerId,
+        roundNumber,
+        guess,
+        clientActionId,
+      });
+    },
+    [roomCode, getSessionCredentials, send]
+  );
+
+  const updateSettings = useCallback(
+    (settings: any) => {
+      if (!roomCode) return;
+      const { playerId } = getSessionCredentials();
+      send({
+        type: 'UPDATE_SETTINGS',
+        roomCode,
+        playerId,
+        settings,
+      });
+    },
+    [roomCode, getSessionCredentials, send]
+  );
+
+  const requestSync = useCallback(() => {
+    if (!roomCode) return;
+    const { playerId } = getSessionCredentials();
+    send({
+      type: 'REQUEST_SYNC',
+      roomCode,
+      playerId,
+    });
+  }, [roomCode, getSessionCredentials, send]);
+
+  const startMatch = useCallback(() => {
+    if (!roomCode) return;
+    const { playerId } = getSessionCredentials();
+    send({
+      type: 'START_MATCH',
+      roomCode,
+      playerId,
+    });
+  }, [roomCode, getSessionCredentials, send]);
+
+  const useJoker = useCallback(() => {
+    if (!roomCode || !roomState) return;
+    const { playerId } = getSessionCredentials();
+    send({
+      type: 'USE_JOKER',
+      roomCode,
+      playerId,
+      roundNumber: roomState.currentRound,
+    });
+  }, [roomCode, roomState, getSessionCredentials, send]);
+
+  const { playerId } = getSessionCredentials();
+  const myPlayerState = roomState?.players[playerId] || null;
+  const allPlayers = roomState ? (Object.values(roomState.players) as PlayerState[]) : [];
+  const otherPlayers = allPlayers.filter((p) => p.id !== playerId);
+  const opponentPlayerState = otherPlayers[0] || null;
+
+  const dismissSolveAnnouncement = useCallback(() => {
+    setSolveAnnouncement(null);
+  }, []);
+
+  return {
+    roomState,
+    myPlayerState,
+    opponentPlayerState,
+    otherPlayers,
+    allPlayers,
+    myPlayerId: playerId,
+    isConnected,
+    isReconnecting,
+    opponentDisconnected,
+    gracePeriodRemaining,
+    lastError,
+    lastEvaluation,
+    solveAnnouncement,
+    dismissSolveAnnouncement,
+    setLastError,
+    toggleReady,
+    startMatch,
+    submitGuess,
+    useJoker,
+    eliminatedLetters,
+    updateSettings,
+    requestSync,
+  };
+}
