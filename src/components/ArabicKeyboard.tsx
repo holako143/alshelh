@@ -90,7 +90,7 @@ export const ArabicKeyboard: React.FC<ArabicKeyboardProps> = ({
         </div>
       )}
 
-      <div className="flex flex-col gap-1 sm:gap-1.5">
+      <div className="flex flex-col gap-1 sm:gap-1.5" dir="ltr">
         {ARABIC_KEYBOARD_LAYOUT.map((row, rowIndex) => (
           <div key={rowIndex} className="flex justify-center items-center gap-0.5 xs:gap-1 sm:gap-1.5 w-full">
             {row.map((key) => {
@@ -108,7 +108,7 @@ export const ArabicKeyboard: React.FC<ArabicKeyboardProps> = ({
                       soundManager.playKeypress();
                       onEnter();
                     }}
-                    className="flex-[1.3] sm:flex-[1.5] max-w-[3.6rem] sm:max-w-[4.5rem] h-10 sm:h-12 px-1 rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-xs bg-emerald-500/90 hover:bg-emerald-400 active:scale-95 text-white flex items-center justify-center gap-0.5 sm:gap-1 transition-all disabled:opacity-40 disabled:pointer-events-none shadow-md shadow-emerald-500/25 border border-emerald-300/30 backdrop-blur-md cursor-pointer select-none"
+                    className="flex-[1.2] sm:flex-[1.4] max-w-[3.4rem] sm:max-w-[4.2rem] h-9 xs:h-10 sm:h-11 md:h-12 px-1 rounded-lg sm:rounded-xl font-bold text-[10px] xs:text-[11px] sm:text-xs bg-emerald-500/90 hover:bg-emerald-400 active:scale-95 text-white flex items-center justify-center gap-0.5 sm:gap-1 transition-all disabled:opacity-40 disabled:pointer-events-none shadow-md shadow-emerald-500/25 border border-emerald-300/30 backdrop-blur-md cursor-pointer select-none shrink-0"
                     aria-label="إدخال التخمين"
                   >
                     <span>إدخال</span>
@@ -128,10 +128,10 @@ export const ArabicKeyboard: React.FC<ArabicKeyboardProps> = ({
                       soundManager.playBackspace();
                       onDelete();
                     }}
-                    className="flex-[1.1] sm:flex-[1.2] max-w-[3rem] sm:max-w-[3.8rem] h-10 sm:h-12 px-1 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm bg-white/[0.08] hover:bg-white/[0.16] active:scale-95 text-white/90 flex items-center justify-center transition-all disabled:opacity-40 disabled:pointer-events-none shadow-xs border border-white/10 backdrop-blur-md cursor-pointer select-none"
+                    className="flex-[1.0] sm:flex-[1.1] max-w-[2.8rem] sm:max-w-[3.6rem] h-9 xs:h-10 sm:h-11 md:h-12 px-1 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm bg-white/[0.08] hover:bg-white/[0.16] active:scale-95 text-white/90 flex items-center justify-center transition-all disabled:opacity-40 disabled:pointer-events-none shadow-xs border border-white/10 backdrop-blur-md cursor-pointer select-none shrink-0"
                     aria-label="حذف الحرف"
                   >
-                    <Delete className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <Delete className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5" />
                   </button>
                 );
               }
@@ -146,7 +146,7 @@ export const ArabicKeyboard: React.FC<ArabicKeyboardProps> = ({
                     soundManager.playKeypress();
                     onChar(key);
                   }}
-                  className={`flex-1 min-w-0 h-10 sm:h-12 px-0.5 rounded-lg sm:rounded-xl font-bold text-sm xs:text-base sm:text-lg border flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 disabled:pointer-events-none cursor-pointer select-none ${getKeyColor(
+                  className={`flex-1 min-w-0 h-9 xs:h-10 sm:h-11 md:h-12 px-0.5 rounded-lg sm:rounded-xl font-bold text-xs xs:text-sm sm:text-base md:text-lg border flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 disabled:pointer-events-none cursor-pointer select-none ${getKeyColor(
                     key
                   )}`}
                   aria-label={`حرف ${key}`}

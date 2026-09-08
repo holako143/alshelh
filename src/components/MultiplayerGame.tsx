@@ -86,8 +86,8 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
       setServerTime(getServerNow());
     };
     updateTime();
-    // 50ms interval ensures accurate real-time clock and instantaneous input locking upon round expiry
-    const interval = setInterval(updateTime, 50);
+    // 250ms interval ensures accurate real-time clock, smooth countdown without high CPU consumption
+    const interval = setInterval(updateTime, 250);
     return () => clearInterval(interval);
   }, [getServerNow]);
 

@@ -95,7 +95,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           key={colIndex}
           id={`tile-r${rowIndex}-c${colIndex}`}
           style={animStyle}
-          className={`relative overflow-hidden w-9 h-9 xs:w-10 xs:h-10 sm:w-12 sm:h-12 md:w-13 md:h-13 rounded-xl sm:rounded-2xl flex items-center justify-center text-lg xs:text-xl sm:text-2xl font-bold select-none transition-colors duration-200 ${bgClass} ${animClass}`}
+          className={`relative overflow-hidden w-8 h-8 xs:w-9 xs:h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-lg sm:rounded-xl flex items-center justify-center text-base xs:text-lg sm:text-2xl font-bold select-none transition-colors duration-200 ${bgClass} ${animClass}`}
         >
           {hasSweep && <span className="light-sweep-beam" />}
           {icon}

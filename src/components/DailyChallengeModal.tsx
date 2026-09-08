@@ -320,7 +320,7 @@ export const DailyChallengeModal: React.FC<DailyChallengeModalProps> = ({
           <HintCard
             hint={currentHint}
             attemptsCount={guesses.length}
-            initialExpanded={true}
+            initialExpanded={false}
           />
         </div>
 

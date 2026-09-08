@@ -36,9 +36,10 @@ export class ServerlessRoomManager {
     hostId: string,
     nickname: string,
     _sessionToken: string,
-    customSettings?: Partial<GameSettings>
+    customSettings?: Partial<GameSettings>,
+    fixedRoomCode?: string
   ): { success: boolean; roomCode: string; state: RoomState } {
-    const roomCode = this.generateRoomCode();
+    const roomCode = fixedRoomCode ? fixedRoomCode.trim().toUpperCase() : this.generateRoomCode();
     const settings: GameSettings = {
       ...DEFAULT_GAME_SETTINGS,
       ...customSettings,
@@ -49,7 +50,7 @@ export class ServerlessRoomManager {
       id: hostId,
       nickname: nickname.trim().substring(0, 20),
       role: 'host',
-      isReady: false,
+      isReady: true,
       isConnected: true,
       connectedAt: now,
       disconnectedAt: null,
@@ -99,13 +100,22 @@ export class ServerlessRoomManager {
     roomCode: string,
     playerId: string,
     nickname: string,
-    _sessionToken: string
+    _sessionToken: string,
+    fallbackSettings?: Partial<GameSettings>,
+    fallbackHostName?: string
   ): { success: boolean; state?: RoomState; error?: string } {
     const code = roomCode.trim().toUpperCase();
-    const room = this.rooms.get(code);
+    let room = this.rooms.get(code);
 
     if (!room) {
-      return { success: false, error: 'رمز الغرفة غير موجود' };
+      // Auto-heal / restore room from invite context if lambda was restarted
+      const hostName = fallbackHostName || 'المستضيف';
+      const created = this.createRoom('host_' + code, hostName, 'tok_host_' + code, fallbackSettings, code);
+      room = this.rooms.get(code);
+    }
+
+    if (!room) {
+      return { success: false, error: 'رمز الغرفة غير موجود أو انتهت صلاحيتها' };
     }
 
     this.checkRoundTimeout(room);
@@ -114,6 +124,7 @@ export class ServerlessRoomManager {
     if (room.players[playerId]) {
       const existing = room.players[playerId];
       existing.isConnected = true;
+      existing.isReady = true;
       existing.nickname = nickname.trim().substring(0, 20);
       room.updatedAt = Date.now();
       room.stateVersion++;
@@ -138,7 +149,7 @@ export class ServerlessRoomManager {
       id: playerId,
       nickname: nickname.trim().substring(0, 20),
       role: 'guest',
-      isReady: false,
+      isReady: true, // Auto ready upon joining!
       isConnected: true,
       connectedAt: now,
       disconnectedAt: null,

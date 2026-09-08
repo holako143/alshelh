@@ -105,7 +105,7 @@ export class ClientRoomEngine {
     }, 500);
   }
 
-  private generateRoomCode(): string {
+  public generateRoomCode(): string {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
     do {
@@ -121,9 +121,10 @@ export class ClientRoomEngine {
     hostId: string,
     nickname: string,
     sessionToken: string,
-    customSettings?: Partial<GameSettings>
+    customSettings?: Partial<GameSettings>,
+    fixedRoomCode?: string
   ): { roomCode: string; state: RoomState } {
-    const roomCode = this.generateRoomCode();
+    const roomCode = fixedRoomCode ? fixedRoomCode.trim().toUpperCase() : this.generateRoomCode();
     const settings: GameSettings = {
       ...DEFAULT_GAME_SETTINGS,
       ...customSettings,
@@ -133,7 +134,7 @@ export class ClientRoomEngine {
       id: hostId,
       nickname: nickname.trim() || 'المستضيف',
       role: 'host',
-      isReady: false,
+      isReady: true,
       isConnected: true,
       connectedAt: Date.now(),
       disconnectedAt: null,
@@ -181,6 +182,76 @@ export class ClientRoomEngine {
     return { roomCode, state: this.sanitizeStateForPlayer(roomState, hostId) };
   }
 
+  public registerRoomFromInvite(
+    roomCode: string,
+    hostNickname: string = 'المستضيف',
+    customSettings?: Partial<GameSettings>
+  ): RoomState {
+    const normalized = roomCode.trim().toUpperCase();
+    let room = this.rooms.get(normalized);
+    if (!room) {
+      try {
+        const raw = localStorage.getItem(`alwird_room_${normalized}`);
+        if (raw) {
+          room = JSON.parse(raw);
+          if (room) this.rooms.set(normalized, room);
+        }
+      } catch {}
+    }
+
+    if (!room) {
+      const settings: GameSettings = {
+        ...DEFAULT_GAME_SETTINGS,
+        ...customSettings,
+      };
+      const hostId = 'host_' + normalized;
+      const hostPlayer: PlayerState = {
+        id: hostId,
+        nickname: hostNickname || 'المستضيف',
+        role: 'host',
+        isReady: true,
+        isConnected: true,
+        connectedAt: Date.now(),
+        disconnectedAt: null,
+        totalScore: 0,
+        roundsWon: 0,
+        wordsSolved: 0,
+        totalAttempts: 0,
+        totalTimeMs: 0,
+        currentGuesses: [],
+        currentEvaluations: [],
+        hasSolved: false,
+        hasExhausted: false,
+        finishedAt: null,
+        jokersRemaining: 1,
+      };
+      room = {
+        roomCode: normalized,
+        status: 'WAITING',
+        settings,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        stateVersion: 1,
+        hostPlayerId: hostId,
+        guestPlayerId: null,
+        players: { [hostId]: hostPlayer },
+        currentRound: 0,
+        roundStartedAt: null,
+        roundDurationMs: settings.roundDurationSeconds * 1000,
+        countdownEndsAt: null,
+        transitionEndsAt: null,
+        currentSecretWord: undefined,
+        revealedWord: null,
+        roundSummaries: [],
+        matchWinnerId: null,
+        isDraw: false,
+      };
+      this.rooms.set(normalized, room);
+      this.saveRoomToStorage(room);
+    }
+    return room;
+  }
+
   public joinRoom(
     roomCode: string,
     playerId: string,
@@ -208,6 +279,7 @@ export class ClientRoomEngine {
     // Already in room
     if (room.players[playerId]) {
       room.players[playerId].isConnected = true;
+      room.players[playerId].isReady = true;
       room.players[playerId].disconnectedAt = null;
       if (nickname && nickname.trim()) {
         room.players[playerId].nickname = nickname.trim();
@@ -233,7 +305,7 @@ export class ClientRoomEngine {
       id: playerId,
       nickname: nickname.trim() || `اللاعب ${existingCount + 1}`,
       role: 'guest',
-      isReady: false,
+      isReady: true, // Automatically ready upon joining as requested
       isConnected: true,
       connectedAt: Date.now(),
       disconnectedAt: null,

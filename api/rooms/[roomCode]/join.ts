@@ -29,13 +29,13 @@ export default function handler(req: any, res: any) {
     }
   }
 
-  const { playerId, nickname, sessionToken } = body || {};
+  const { playerId, nickname, sessionToken, fallbackSettings, fallbackHostName } = body || {};
 
   if (!playerId || !nickname || !sessionToken) {
     return res.status(400).json({ error: 'البيانات غير مكتملة' });
   }
 
-  const result = roomManager.joinRoom(roomCode, playerId, nickname, sessionToken);
+  const result = roomManager.joinRoom(roomCode, playerId, nickname, sessionToken, fallbackSettings, fallbackHostName);
   if (!result.success) {
     return res.status(400).json({ error: result.error });
   }

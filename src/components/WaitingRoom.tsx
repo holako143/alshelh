@@ -64,7 +64,9 @@ export const WaitingRoom: React.FC<WaitingRoomProps> = ({
 
   const handleShareOrCopyLink = async () => {
     soundManager.playKeypress();
-    const inviteUrl = `${window.location.origin}/?room=${roomState.roomCode}`;
+    const hostPlayer = roomState.players[roomState.hostPlayerId];
+    const hostName = hostPlayer ? hostPlayer.nickname : 'المستضيف';
+    const inviteUrl = `${window.location.origin}/?room=${roomState.roomCode}&host=${encodeURIComponent(hostName)}&r=${roomState.settings.totalRounds}&t=${roomState.settings.roundDurationSeconds}&th=${encodeURIComponent(roomState.settings.themeCategory || 'ALL')}`;
     if (navigator.share) {
       try {
         await navigator.share({

@@ -25,7 +25,10 @@ export function useMultiplayerSocket(
   roomCode: string | null,
   onServerTimestamp?: (serverTimestamp: number, rttMs?: number) => void
 ) {
-  const [roomState, setRoomState] = useState<RoomState | null>(null);
+  const [roomState, setRoomState] = useState<RoomState | null>(() => {
+    if (!roomCode) return null;
+    return clientRoomEngine.getRoomState(roomCode) || null;
+  });
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
@@ -447,10 +450,6 @@ export function useMultiplayerSocket(
         console.info('WebSocket connection failed, switching to in-browser Serverless multiplayer engine...');
         isClientModeRef.current = true;
         reconnectAttemptsRef.current = 0;
-        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connect();
-        }, 50);
       }
     };
   }, [roomCode, getSessionCredentials, send]);

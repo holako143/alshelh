@@ -104,34 +104,26 @@ export default function App() {
       sessionStorage.setItem('alwird_player_id', playerId);
       sessionStorage.setItem('alwird_session_token', sessionToken);
 
-      let createdRoomCode: string | null = null;
+      // 1. Generate standard 5-character code and create instantly in clientRoomEngine
+      const roomCode = clientRoomEngine.generateRoomCode();
+      clientRoomEngine.createRoom(playerId, nickname, sessionToken, settings, roomCode);
 
-      try {
-        const res = await safeFetchJson<{ roomCode: string }>('/api/rooms/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            hostId: playerId,
-            nickname,
-            sessionToken,
-            settings,
-          }),
-        });
-
-        if (res.ok && res.data?.roomCode) {
-          createdRoomCode = res.data.roomCode;
-        }
-      } catch {
-        // Server fetch failed, smoothly fallback to in-browser engine
-      }
-
-      if (!createdRoomCode) {
-        const localRoom = clientRoomEngine.createRoom(playerId, nickname, sessionToken, settings);
-        createdRoomCode = localRoom.roomCode;
-      }
-
-      setActiveRoomCode(createdRoomCode.trim().toUpperCase());
+      // 2. Transition immediately so there is ZERO black screen or waiting spinner
+      setActiveRoomCode(roomCode);
       setView('multiplayer');
+
+      // 3. Persist to serverless API in background with matching roomCode
+      safeFetchJson<{ roomCode: string }>('/api/rooms/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomCode,
+          hostId: playerId,
+          nickname,
+          sessionToken,
+          settings,
+        }),
+      }).catch(() => {});
     } catch (err: any) {
       setErrorMessage(err.message || 'حدث خطأ في إنشاء الغرفة');
     } finally {
@@ -151,34 +143,41 @@ export default function App() {
       sessionStorage.setItem('alwird_player_id', playerId);
       sessionStorage.setItem('alwird_session_token', sessionToken);
 
-      let joined = false;
+      // Extract any invite parameters if joined via link
+      const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const hostName = params?.get('host') || 'المستضيف';
+      const rounds = parseInt(params?.get('r') || params?.get('rounds') || '5', 10);
+      const timeSecs = parseInt(params?.get('t') || params?.get('time') || '60', 10);
+      const theme = params?.get('th') || params?.get('theme') || 'ALL';
 
+      const inviteSettings: Partial<GameSettings> = {
+        totalRounds: isNaN(rounds) ? 5 : rounds,
+        roundDurationSeconds: isNaN(timeSecs) ? 60 : timeSecs,
+        themeCategory: theme,
+      };
+
+      // 1. Ensure room exists in local engine (creates from invite details if new device)
+      if (!clientRoomEngine.getRoomState(roomCode)) {
+        clientRoomEngine.registerRoomFromInvite(roomCode, hostName, inviteSettings);
+      }
+
+      // 2. Join in local engine with auto-ready = true!
+      clientRoomEngine.joinRoom(roomCode, playerId, nickname, sessionToken);
+
+      // 3. Forward to serverless backend as well
       try {
-        const res = await safeFetchJson<{ success: boolean }>(`/api/rooms/${roomCode}/join`, {
+        await safeFetchJson<{ success: boolean }>(`/api/rooms/${roomCode}/join`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             playerId,
             nickname,
             sessionToken,
+            fallbackSettings: inviteSettings,
+            fallbackHostName: hostName,
           }),
         });
-
-        if (res.ok && res.data?.success) {
-          joined = true;
-        }
-      } catch {
-        // Server fetch failed, smoothly fallback
-      }
-
-      if (!joined) {
-        const localResult = clientRoomEngine.joinRoom(roomCode, playerId, nickname, sessionToken);
-        if (localResult.success) {
-          joined = true;
-        } else {
-          throw new Error('رمز الغرفة غير موجود أو انتهت صلاحيتها');
-        }
-      }
+      } catch {}
 
       setActiveRoomCode(roomCode);
       setView('multiplayer');
