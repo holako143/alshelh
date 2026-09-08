@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { safeFetchJson } from '../lib/api-client';
 
 export function useClockSync() {
   const [serverOffsetMs, setServerOffsetMs] = useState<number>(0);
@@ -7,12 +8,11 @@ export function useClockSync() {
   const syncTime = useCallback(async () => {
     try {
       const t0 = Date.now();
-      const res = await fetch('/api/time');
+      const res = await safeFetchJson<{ serverTimestamp: number }>('/api/time');
       const t1 = Date.now();
-      if (!res.ok) return;
+      if (!res.ok || !res.data?.serverTimestamp) return;
 
-      const data = await res.json();
-      const serverTimestamp = data.serverTimestamp;
+      const serverTimestamp = res.data.serverTimestamp;
       const rtt = t1 - t0;
       // Estimated server time at moment t1 is serverTimestamp + rtt/2
       const estimatedServerTimeAtT1 = serverTimestamp + rtt / 2;

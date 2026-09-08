@@ -1,6 +1,7 @@
 import { roomManager } from '../_roomStore';
 
 export default function handler(req: any, res: any) {
+  res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -20,11 +21,21 @@ export default function handler(req: any, res: any) {
     return res.status(400).json({ error: 'كود الغرفة غير محدد' });
   }
 
+  let body = req.body;
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch {
+      body = {};
+    }
+  }
+  body = body || {};
+
   if (req.method === 'POST') {
     // Action dispatch (action: 'join', 'action', etc.)
-    const { action, playerId, nickname, sessionToken, message } = req.body || {};
+    const { action, playerId, nickname, sessionToken, message } = body;
 
-    if (action === 'join' || req.url.includes('/join')) {
+    if (action === 'join' || req.url?.includes('/join')) {
       if (!playerId || !nickname || !sessionToken) {
         return res.status(400).json({ error: 'البيانات غير مكتملة' });
       }
@@ -36,7 +47,7 @@ export default function handler(req: any, res: any) {
     }
 
     if (action === 'action' || message) {
-      const msg = message || req.body;
+      const msg = message || body;
       const pId = playerId || msg?.playerId;
 
       if (!msg || !msg.type) {

@@ -1,4 +1,4 @@
-import { roomManager } from '../_roomStore';
+import { roomManager } from '../../_roomStore';
 
 export default function handler(req: any, res: any) {
   res.setHeader('Content-Type', 'application/json');
@@ -14,12 +14,10 @@ export default function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  if (req.method === 'GET') {
-    return res.status(200).json({ ok: true, endpoint: 'rooms/create' });
-  }
+  const roomCode = (req.query.roomCode || req.url?.split('/')?.[3])?.toString().toUpperCase();
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  if (!roomCode) {
+    return res.status(400).json({ error: 'كود الغرفة غير محدد' });
   }
 
   let body = req.body;
@@ -30,12 +28,17 @@ export default function handler(req: any, res: any) {
       body = {};
     }
   }
-  const { hostId, nickname, sessionToken, settings } = body || {};
 
-  if (!hostId || !nickname || !sessionToken) {
+  const { playerId, nickname, sessionToken } = body || {};
+
+  if (!playerId || !nickname || !sessionToken) {
     return res.status(400).json({ error: 'البيانات غير مكتملة' });
   }
 
-  const result = roomManager.createRoom(hostId, nickname, sessionToken, settings);
+  const result = roomManager.joinRoom(roomCode, playerId, nickname, sessionToken);
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
   return res.status(200).json(result);
 }

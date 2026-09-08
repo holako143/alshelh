@@ -11,6 +11,7 @@ import { DailyChallengeModal } from './components/DailyChallengeModal';
 import { GameHeader } from './components/GameHeader';
 import { GameSettings } from './shared/types';
 import { clientRoomEngine } from './game-engine/client-room-engine';
+import { safeFetchJson } from './lib/api-client';
 
 export default function App() {
   const [view, setView] = useState<'lobby' | 'multiplayer' | 'singleplayer'>('lobby');
@@ -106,7 +107,7 @@ export default function App() {
       let createdRoomCode: string | null = null;
 
       try {
-        const res = await fetch('/api/rooms/create', {
+        const res = await safeFetchJson<{ roomCode: string }>('/api/rooms/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -117,11 +118,8 @@ export default function App() {
           }),
         });
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.roomCode) {
-            createdRoomCode = data.roomCode;
-          }
+        if (res.ok && res.data?.roomCode) {
+          createdRoomCode = res.data.roomCode;
         }
       } catch {
         // Server fetch failed, smoothly fallback to in-browser engine
@@ -156,7 +154,7 @@ export default function App() {
       let joined = false;
 
       try {
-        const res = await fetch(`/api/rooms/${roomCode}/join`, {
+        const res = await safeFetchJson<{ success: boolean }>(`/api/rooms/${roomCode}/join`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -166,11 +164,8 @@ export default function App() {
           }),
         });
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.success) {
-            joined = true;
-          }
+        if (res.ok && res.data?.success) {
+          joined = true;
         }
       } catch {
         // Server fetch failed, smoothly fallback
@@ -181,7 +176,7 @@ export default function App() {
         if (localResult.success) {
           joined = true;
         } else {
-          throw new Error(localResult.error || 'رمز الغرفة غير موجود أو غير صالح');
+          throw new Error('رمز الغرفة غير موجود أو انتهت صلاحيتها');
         }
       }
 

@@ -51,7 +51,9 @@ export function useMultiplayerSocket(
   const pendingGuessRef = useRef<{ guess: string; roundNumber: number } | null>(null);
   const isExplicitlyClosedRef = useRef<boolean>(false);
   const latestVersionRef = useRef<number>(0);
-  const isClientModeRef = useRef<boolean>(false);
+  const isClientModeRef = useRef<boolean>(
+    typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app')
+  );
 
   // Persistent Player ID and Session Token (isolated per tab session so 2 tabs can play against each other)
   const getSessionCredentials = useCallback(() => {
@@ -157,8 +159,15 @@ export function useMultiplayerSocket(
     ws.onmessage = (event) => {
       lastPongReceivedRef.current = Date.now();
 
+      if (!event.data || typeof event.data !== 'string') return;
+      const raw = event.data.trim();
+      if (!raw.startsWith('{')) {
+        // Ignore non-JSON frames (e.g. plain text or HTML error messages from proxy)
+        return;
+      }
+
       try {
-        const msg: WebSocketServerMessage = JSON.parse(event.data);
+        const msg: WebSocketServerMessage = JSON.parse(raw);
 
         if ('serverTimestamp' in msg && typeof msg.serverTimestamp === 'number') {
           if (onServerTimestamp) {

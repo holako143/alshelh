@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, CheckCircle2, XCircle, Play, Loader2, Users, ShieldCheck, Zap } from 'lucide-react';
 import { runAllEngineTests, TestResult } from '../game-engine/engine-tests';
 import { clientRoomEngine } from '../game-engine/client-room-engine';
+import { safeFetchJson } from '../lib/api-client';
 
 interface SelfTestModalProps {
   isOpen: boolean;
@@ -30,10 +31,9 @@ export const SelfTestModal: React.FC<SelfTestModalProps> = ({ isOpen, onClose })
     setMultiplayerTestResult(null);
 
     try {
-      const res = await fetch('/api/test-multiplayer', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        setMultiplayerTestResult(data);
+      const res = await safeFetchJson('/api/test-multiplayer', { method: 'POST' });
+      if (res.ok && res.data) {
+        setMultiplayerTestResult(res.data);
         return;
       }
     } catch {}
