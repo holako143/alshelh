@@ -20,6 +20,8 @@ interface GameHeaderProps {
   player1Score?: number;
   player2Score?: number;
   playerCount?: number;
+  latencyMs?: number | null;
+  isReconnecting?: boolean;
 }
 
 export const GameHeader: React.FC<GameHeaderProps> = ({
@@ -40,6 +42,8 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   player1Score = 0,
   player2Score = 0,
   playerCount,
+  latencyMs,
+  isReconnecting,
 }) => {
   const [copied, setCopied] = useState(false);
   const [isMuted, setIsMuted] = useState(soundManager.isMuted());
@@ -114,16 +118,46 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           </div>
 
           {roomCode && (
-            <button
-              id="btn-copy-room-code"
-              type="button"
-              onClick={handleCopyCode}
-              title="نسخ رمز الغرفة"
-              className="inline-flex items-center gap-1.5 text-xs font-mono font-bold bg-white/[0.06] hover:bg-white/[0.12] px-2.5 py-1 rounded-xl border border-white/15 text-white/90 transition-all cursor-pointer backdrop-blur-md shadow-xs"
-            >
-              <span>{roomCode}</span>
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 opacity-60" />}
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                id="btn-copy-room-code"
+                type="button"
+                onClick={handleCopyCode}
+                title="نسخ رمز الغرفة"
+                className="inline-flex items-center gap-1.5 text-xs font-mono font-bold bg-white/[0.06] hover:bg-white/[0.12] px-2.5 py-1 rounded-xl border border-white/15 text-white/90 transition-all cursor-pointer backdrop-blur-md shadow-xs"
+              >
+                <span>{roomCode}</span>
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 opacity-60" />}
+              </button>
+
+              {isReconnecting ? (
+                <span
+                  id="badge-reconnecting"
+                  className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-lg animate-pulse"
+                  title="جارٍ استعادة الاتصال بالسيرفر..."
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                  اتصال...
+                </span>
+              ) : latencyMs !== undefined && latencyMs !== null ? (
+                <span
+                  id="badge-latency"
+                  className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono font-medium text-white/60 bg-white/[0.04] border border-white/10 px-1.5 py-0.5 rounded-lg"
+                  title={`سرعة استجابة السيرفر: ${latencyMs} ميلي ثانية`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      latencyMs < 100
+                        ? 'bg-emerald-400 shadow-xs shadow-emerald-400/80'
+                        : latencyMs < 250
+                        ? 'bg-amber-400'
+                        : 'bg-rose-400'
+                    }`}
+                  />
+                  {latencyMs}ms
+                </span>
+              ) : null}
+            </div>
           )}
         </div>
 

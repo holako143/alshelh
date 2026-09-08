@@ -84,53 +84,53 @@ export const HintCard: React.FC<HintCardProps> = ({
         </div>
       </div>
 
-      {/* Progressive Stage Pills */}
-      <div className="mt-2.5 flex items-center justify-between gap-1 border-t border-white/10 pt-2 text-[11px]">
-        <div className="flex items-center gap-1.5 w-full">
-          {/* Level 1 Pill */}
-          <div
-            className={`flex-1 py-1 px-2 rounded-lg text-center font-bold transition-all ${
-              currentLevel >= 1
-                ? 'bg-amber-500/25 text-amber-200 border border-amber-400/40'
-                : 'bg-white/5 text-white/40'
-            }`}
-          >
-            1. الوصف العام
+      {/* Progressive Stage Pills & Clue Content (Only when expanded) */}
+      {isExpanded && (
+        <>
+          <div className="mt-2.5 flex items-center justify-between gap-1 border-t border-white/10 pt-2 text-[11px]">
+            <div className="flex items-center gap-1.5 w-full">
+              {/* Level 1 Pill */}
+              <div
+                className={`flex-1 py-1 px-2 rounded-lg text-center font-bold transition-all ${
+                  currentLevel >= 1
+                    ? 'bg-amber-500/25 text-amber-200 border border-amber-400/40'
+                    : 'bg-white/5 text-white/40'
+                }`}
+              >
+                1. الوصف العام
+              </div>
+
+              {/* Level 2 Pill */}
+              <button
+                type="button"
+                onClick={() => setUnlockedLevel(Math.max(unlockedLevel, 2))}
+                className={`flex-1 py-1 px-2 rounded-lg text-center font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                  currentLevel >= 2
+                    ? 'bg-teal-500/25 text-teal-200 border border-teal-400/40'
+                    : 'bg-white/5 text-white/40 hover:bg-white/10'
+                }`}
+              >
+                {currentLevel >= 2 ? <Unlock className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
+                <span>2. البداية</span>
+              </button>
+
+              {/* Level 3 Pill */}
+              <button
+                type="button"
+                onClick={() => setUnlockedLevel(Math.max(unlockedLevel, 3))}
+                className={`flex-1 py-1 px-2 rounded-lg text-center font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                  currentLevel >= 3
+                    ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-400/40'
+                    : 'bg-white/5 text-white/40 hover:bg-white/10'
+                }`}
+              >
+                {currentLevel >= 3 ? <Unlock className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
+                <span>3. الحسم</span>
+              </button>
+            </div>
           </div>
 
-          {/* Level 2 Pill */}
-          <button
-            type="button"
-            onClick={() => setUnlockedLevel(Math.max(unlockedLevel, 2))}
-            className={`flex-1 py-1 px-2 rounded-lg text-center font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
-              currentLevel >= 2
-                ? 'bg-teal-500/25 text-teal-200 border border-teal-400/40'
-                : 'bg-white/5 text-white/40 hover:bg-white/10'
-            }`}
-          >
-            {currentLevel >= 2 ? <Unlock className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
-            <span>2. البداية</span>
-          </button>
-
-          {/* Level 3 Pill */}
-          <button
-            type="button"
-            onClick={() => setUnlockedLevel(Math.max(unlockedLevel, 3))}
-            className={`flex-1 py-1 px-2 rounded-lg text-center font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
-              currentLevel >= 3
-                ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-400/40'
-                : 'bg-white/5 text-white/40 hover:bg-white/10'
-            }`}
-          >
-            {currentLevel >= 3 ? <Unlock className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
-            <span>3. الحسم</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Expandable Clue Content */}
-      {isExpanded && (
-        <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-right backdrop-blur-md transition-all flex flex-col gap-2">
+          <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-right backdrop-blur-md transition-all flex flex-col gap-2">
           {/* Level 1 Content */}
           <div className="flex items-start gap-2">
             <span className="text-amber-400 font-bold text-xs mt-0.5">●</span>
@@ -185,7 +185,8 @@ export const HintCard: React.FC<HintCardProps> = ({
             </div>
           )}
         </div>
-      )}
-    </div>
-  );
+      </>
+    )}
+  </div>
+);
 };

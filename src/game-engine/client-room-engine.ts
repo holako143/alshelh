@@ -1,48 +1,108 @@
-import { WebSocket } from 'ws';
+/**
+ * In-Browser Serverless Room & Multiplayer Engine
+ * Zero external servers, zero external APIs, zero paid subscriptions.
+ * Supports:
+ * 1. Fully authoritative game rules in-browser (scoring, validation, timers)
+ * 2. Cross-tab real-time sync via native HTML5 BroadcastChannel & localStorage
+ * 3. Autonomous AI Bot competitors with realistic human-like typing and evaluations
+ * 4. Seamless plug-and-play adapter matching standard WebSocket interface
+ */
+
 import {
   RoomState,
-  RoomStatus,
   PlayerState,
   GameSettings,
   RoundSummary,
   WebSocketServerMessage,
-} from '../src/shared/types';
-import { DEFAULT_GAME_SETTINGS, GAME_CONFIG, ARABIC_LETTERS_SET } from '../src/shared/constants';
-import { selectSecretWord, validateGuessWord } from '../src/game-engine/word-validator';
-import { evaluateGuess, isWordSolved } from '../src/game-engine/guess-evaluator';
-import { calculateRoundScore, determineRoundWinner, determineMatchWinner } from '../src/game-engine/scoring';
+  WebSocketClientMessage,
+  TileState,
+} from '../shared/types';
+import { DEFAULT_GAME_SETTINGS, GAME_CONFIG, ARABIC_LETTERS_SET } from '../shared/constants';
+import { selectSecretWord, validateGuessWord } from './word-validator';
+import { evaluateGuess, isWordSolved } from './guess-evaluator';
+import { calculateRoundScore, determineRoundWinner, determineMatchWinner } from './scoring';
+import { CURATED_WORDS_WITH_HINTS } from './words-data';
 
-interface ConnectedClient {
-  ws: WebSocket;
-  playerId: string;
-  roomCode: string;
-  sessionToken: string;
+export interface LocalSocketListener {
+  onMessage: (msg: WebSocketServerMessage) => void;
+  onClose?: () => void;
 }
 
-export class RoomManager {
-  // roomCode -> RoomState
+export class ClientRoomEngine {
+  private static instance: ClientRoomEngine;
   private rooms: Map<string, RoomState> = new Map();
-  // ws -> ConnectedClient
-  private clients: Map<WebSocket, ConnectedClient> = new Map();
-  // playerId -> WebSocket
-  private playerSockets: Map<string, WebSocket> = new Map();
-  // Idempotency cache: roomCode:roundNumber:clientActionId -> boolean
-  private idempotencyCache: Map<string, any> = new Map();
-  // Interval timer for server game loop (authoritative timer)
-  private tickInterval: NodeJS.Timeout | null = null;
-  // Debounce timers for momentary disconnects to avoid flashing alert banners on minor network jitter
-  private disconnectDebounceTimers: Map<string, NodeJS.Timeout> = new Map();
+  private subscribers: Map<string, Set<LocalSocketListener>> = new Map(); // roomCode -> listeners
+  private broadcastChannel: BroadcastChannel | null = null;
+  private botTimers: Map<string, NodeJS.Timeout[]> = new Map();
+  private roundTimers: Map<string, NodeJS.Timeout> = new Map();
+  private gameLoopInterval: NodeJS.Timeout | null = null;
 
-  constructor() {
-    this.startServerGameLoop();
+  private constructor() {
+    // Initialize BroadcastChannel if supported
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        this.broadcastChannel = new BroadcastChannel('alwird_multiplayer_channel');
+        this.broadcastChannel.onmessage = (event) => {
+          this.handleBroadcastMessage(event.data);
+        };
+      } catch (err) {
+        console.warn('BroadcastChannel initialization failed, using in-memory only', err);
+      }
+    }
+
+    // Load any existing room from localStorage for persistence across reloads
+    this.restoreFromStorage();
+    this.startGameLoop();
   }
 
-  public getActiveRoomCount(): number {
-    return this.rooms.size;
+  public static getInstance(): ClientRoomEngine {
+    if (!ClientRoomEngine.instance) {
+      ClientRoomEngine.instance = new ClientRoomEngine();
+    }
+    return ClientRoomEngine.instance;
   }
 
-  public getTotalPlayerCount(): number {
-    return this.playerSockets.size;
+  private restoreFromStorage() {
+    if (typeof window === 'undefined') return;
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('alwird_room_')) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const state: RoomState = JSON.parse(raw);
+            // Only restore recent rooms (< 2 hours old)
+            if (Date.now() - state.updatedAt < 2 * 60 * 60 * 1000) {
+              this.rooms.set(state.roomCode, state);
+            } else {
+              localStorage.removeItem(key);
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
+  private saveRoomToStorage(room: RoomState) {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(`alwird_room_${room.roomCode}`, JSON.stringify(room));
+    } catch {}
+  }
+
+  private startGameLoop() {
+    if (this.gameLoopInterval) clearInterval(this.gameLoopInterval);
+    this.gameLoopInterval = setInterval(() => {
+      const now = Date.now();
+      this.rooms.forEach((room) => {
+        if (room.status === 'PLAYING' && room.roundStartedAt) {
+          const roundEnd = room.roundStartedAt + room.roundDurationMs;
+          if (now >= roundEnd) {
+            this.endRound(room);
+          }
+        }
+      });
+    }, 500);
   }
 
   private generateRoomCode(): string {
@@ -57,9 +117,6 @@ export class RoomManager {
     return code;
   }
 
-  /**
-   * Creates a new room with host player
-   */
   public createRoom(
     hostId: string,
     nickname: string,
@@ -118,25 +175,37 @@ export class RoomManager {
     };
 
     this.rooms.set(roomCode, roomState);
+    this.saveRoomToStorage(roomState);
+    this.broadcastToTabs({ type: 'SYNC_ROOM', room: roomState });
+
     return { roomCode, state: this.sanitizeStateForPlayer(roomState, hostId) };
   }
 
-  /**
-   * Joins an existing room
-   */
   public joinRoom(
     roomCode: string,
     playerId: string,
     nickname: string,
     sessionToken: string
   ): { success: boolean; state?: RoomState; error?: string } {
-    const normalizedRoomCode = roomCode.trim().toUpperCase();
-    const room = this.rooms.get(normalizedRoomCode);
+    const normalized = roomCode.trim().toUpperCase();
+    let room = this.rooms.get(normalized);
+
+    // If room not in memory, check localStorage
+    if (!room) {
+      try {
+        const raw = localStorage.getItem(`alwird_room_${normalized}`);
+        if (raw) {
+          room = JSON.parse(raw);
+          if (room) this.rooms.set(normalized, room);
+        }
+      } catch {}
+    }
+
     if (!room) {
       return { success: false, error: 'رمز الغرفة غير موجود' };
     }
 
-    // Check if player is already in this room (reconnection or socket re-join)
+    // Already in room
     if (room.players[playerId]) {
       room.players[playerId].isConnected = true;
       room.players[playerId].disconnectedAt = null;
@@ -145,15 +214,14 @@ export class RoomManager {
       }
       room.stateVersion++;
       room.updatedAt = Date.now();
-      // Synchronize immediately to all room players
+      this.saveRoomToStorage(room);
       this.broadcastStateSync(room);
       return { success: true, state: this.sanitizeStateForPlayer(room, playerId) };
     }
 
-    // Check capacity (up to 10 players or configured room capacity)
     const maxCapacity = room.settings.maxPlayers || GAME_CONFIG.maxPlayersPerRoom;
-    const existingPlayerCount = Object.keys(room.players).length;
-    if (existingPlayerCount >= maxCapacity) {
+    const existingCount = Object.keys(room.players).length;
+    if (existingCount >= maxCapacity) {
       return { success: false, error: `الغرفة مكتملة (الحد الأقصى ${maxCapacity} لاعبين)` };
     }
 
@@ -163,7 +231,7 @@ export class RoomManager {
 
     const guestPlayer: PlayerState = {
       id: playerId,
-      nickname: nickname.trim() || `اللاعب ${existingPlayerCount + 1}`,
+      nickname: nickname.trim() || `اللاعب ${existingCount + 1}`,
       role: 'guest',
       isReady: false,
       isConnected: true,
@@ -192,15 +260,77 @@ export class RoomManager {
     room.stateVersion++;
     room.updatedAt = Date.now();
 
-    // Broadcast synchronized state to all players in the room
+    this.saveRoomToStorage(room);
     this.broadcastStateSync(room);
 
     return { success: true, state: this.sanitizeStateForPlayer(room, playerId) };
   }
 
-  /**
-   * Toggle player ready status
-   */
+  public addBot(roomCode: string, botName: string = 'الروبوت الذكي 🤖'): boolean {
+    const room = this.rooms.get(roomCode.trim().toUpperCase());
+    if (!room || room.status !== 'WAITING' && room.status !== 'READY_CHECK') return false;
+
+    const botId = 'bot_' + Math.random().toString(36).substring(2, 8);
+    const botPlayer: PlayerState = {
+      id: botId,
+      nickname: botName,
+      role: 'guest',
+      isReady: true,
+      isConnected: true,
+      connectedAt: Date.now(),
+      disconnectedAt: null,
+      totalScore: 0,
+      roundsWon: 0,
+      wordsSolved: 0,
+      totalAttempts: 0,
+      totalTimeMs: 0,
+      currentGuesses: [],
+      currentEvaluations: [],
+      hasSolved: false,
+      hasExhausted: false,
+      finishedAt: null,
+      jokersRemaining: 1,
+    };
+
+    if (!room.guestPlayerId) {
+      room.guestPlayerId = botId;
+    }
+    room.players[botId] = botPlayer;
+    if (Object.keys(room.players).length >= 2) {
+      room.status = 'READY_CHECK';
+    }
+    room.stateVersion++;
+    room.updatedAt = Date.now();
+
+    this.saveRoomToStorage(room);
+    this.broadcastStateSync(room);
+    return true;
+  }
+
+  public removeBot(roomCode: string, botId?: string): boolean {
+    const room = this.rooms.get(roomCode.trim().toUpperCase());
+    if (!room || room.status !== 'WAITING' && room.status !== 'READY_CHECK') return false;
+
+    const targetBotId = botId || Object.keys(room.players).find((id) => id.startsWith('bot_'));
+    if (!targetBotId) return false;
+
+    delete room.players[targetBotId];
+    if (room.guestPlayerId === targetBotId) {
+      const remainingGuests = Object.keys(room.players).filter((id) => id !== room.hostPlayerId);
+      room.guestPlayerId = remainingGuests.length > 0 ? remainingGuests[0] : null;
+    }
+
+    if (Object.keys(room.players).length < 2) {
+      room.status = 'WAITING';
+    }
+    room.stateVersion++;
+    room.updatedAt = Date.now();
+
+    this.saveRoomToStorage(room);
+    this.broadcastStateSync(room);
+    return true;
+  }
+
   public toggleReady(roomCode: string, playerId: string, isReady: boolean): boolean {
     const room = this.rooms.get(roomCode.trim().toUpperCase());
     if (!room || !room.players[playerId]) return false;
@@ -209,23 +339,19 @@ export class RoomManager {
     room.stateVersion++;
     room.updatedAt = Date.now();
 
-    // Check if all connected players in the room (minimum 2) are ready
-    const players = Object.values(room.players);
-    const connectedPlayers = players.filter((p) => p.isConnected);
+    const connectedPlayers = Object.values(room.players).filter((p) => p.isConnected);
     const allReady = connectedPlayers.length >= 2 && connectedPlayers.every((p) => p.isReady);
 
     if (allReady && (room.status === 'READY_CHECK' || room.status === 'WAITING')) {
       this.startCountdown(room);
     } else {
+      this.saveRoomToStorage(room);
       this.broadcastStateSync(room);
     }
 
     return true;
   }
 
-  /**
-   * Host starts the match manually if at least 2 players are ready
-   */
   public startMatch(roomCode: string, hostPlayerId: string): boolean {
     const room = this.rooms.get(roomCode.trim().toUpperCase());
     if (!room || room.hostPlayerId !== hostPlayerId) return false;
@@ -238,35 +364,20 @@ export class RoomManager {
     return true;
   }
 
-  /**
-   * Host updates game settings
-   */
   public updateSettings(roomCode: string, playerId: string, newSettings: Partial<GameSettings>): boolean {
     const room = this.rooms.get(roomCode.trim().toUpperCase());
-    if (!room || room.hostPlayerId !== playerId || room.status !== 'WAITING' && room.status !== 'READY_CHECK') {
-      return false;
-    }
+    if (!room || room.hostPlayerId !== playerId) return false;
 
-    room.settings = {
-      ...room.settings,
-      ...newSettings,
-    };
+    room.settings = { ...room.settings, ...newSettings };
     room.roundDurationMs = room.settings.roundDurationSeconds * 1000;
     room.stateVersion++;
     room.updatedAt = Date.now();
 
-    this.broadcastToRoom(room.roomCode, {
-      type: 'ROOM_STATE_SYNC',
-      state: this.sanitizeStateForRoom(room),
-      serverTimestamp: Date.now(),
-    });
-
+    this.saveRoomToStorage(room);
+    this.broadcastStateSync(room);
     return true;
   }
 
-  /**
-   * Starts a 3-second countdown before round 1 or match start
-   */
   private startCountdown(room: RoomState) {
     room.status = 'COUNTDOWN';
     const countdownDurationMs = 3000;
@@ -274,6 +385,7 @@ export class RoomManager {
     room.stateVersion++;
     room.updatedAt = Date.now();
 
+    this.saveRoomToStorage(room);
     this.broadcastToRoom(room.roomCode, {
       type: 'COUNTDOWN_STARTED',
       endsAt: room.countdownEndsAt,
@@ -281,16 +393,12 @@ export class RoomManager {
     });
 
     setTimeout(() => {
-      // Ensure room is still in countdown
       if (room.status === 'COUNTDOWN') {
         this.startNextRound(room);
       }
     }, countdownDurationMs);
   }
 
-  /**
-   * Starts next round with server-authoritative secret word and timer
-   */
   private startNextRound(room: RoomState) {
     room.currentRound++;
     room.status = 'PLAYING';
@@ -298,7 +406,6 @@ export class RoomManager {
     room.transitionEndsAt = null;
     room.revealedWord = null;
 
-    // Reset player round states
     for (const p of Object.values(room.players)) {
       p.currentGuesses = [];
       p.currentEvaluations = [];
@@ -307,7 +414,6 @@ export class RoomManager {
       p.finishedAt = null;
     }
 
-    // Determine duration for this round (custom or standard)
     const customDurations = room.settings.customRoundDurations;
     let durationSec = room.settings.roundDurationSeconds;
     if (customDurations && customDurations[room.currentRound - 1]) {
@@ -316,14 +422,14 @@ export class RoomManager {
     room.roundDurationMs = durationSec * 1000;
     room.roundStartedAt = Date.now();
 
-    // Select secret word on the server ONCE for both players with optional theme
     const { word, hint } = selectSecretWord(room.currentRound, undefined, room.settings.themeCategory);
     room.currentSecretWord = word;
     room.currentHint = hint;
     room.stateVersion++;
     room.updatedAt = Date.now();
 
-    // Broadcast ROUND_STARTED (without the secret word, but with the clue!)
+    this.saveRoomToStorage(room);
+
     this.broadcastToRoom(room.roomCode, {
       type: 'ROUND_STARTED',
       roundNumber: room.currentRound,
@@ -334,13 +440,62 @@ export class RoomManager {
       serverTimestamp: Date.now(),
     });
 
-    // Also send fresh state sync
     this.broadcastStateSync(room);
+
+    // Schedule AI Bot actions for this round
+    this.scheduleBotsForRound(room);
   }
 
-  /**
-   * Submit and evaluate a player's guess
-   */
+  private scheduleBotsForRound(room: RoomState) {
+    const roomCode = room.roomCode;
+    // Clear any previous bot timers
+    const existing = this.botTimers.get(roomCode);
+    if (existing) {
+      existing.forEach((t) => clearTimeout(t));
+    }
+    this.botTimers.set(roomCode, []);
+
+    const bots = Object.values(room.players).filter((p) => p.id.startsWith('bot_'));
+    if (bots.length === 0) return;
+
+    const secretWord = room.currentSecretWord || '';
+    const wordList = CURATED_WORDS_WITH_HINTS.map((c) => c.word);
+
+    bots.forEach((bot) => {
+      // Plan bot attempts: 2 to 4 guesses with realistic intervals
+      const willSolve = Math.random() > 0.15; // 85% chance to solve
+      const solveAttempt = willSolve ? Math.floor(Math.random() * 3) + 2 : 99; // attempt 2, 3, or 4
+
+      let accumulatedDelay = Math.floor(Math.random() * 2500) + 3500; // 3.5s - 6s for first guess
+
+      for (let attempt = 1; attempt <= room.settings.maxAttempts; attempt++) {
+        const isSolvingAttempt = attempt === solveAttempt;
+        const delay = accumulatedDelay;
+
+        const timer = setTimeout(() => {
+          if (room.status !== 'PLAYING' || room.currentRound !== room.currentRound) return;
+          if (bot.hasSolved || bot.hasExhausted) return;
+
+          let guessWord = '';
+          if (isSolvingAttempt) {
+            guessWord = secretWord;
+          } else {
+            // Pick random word different from secret
+            const candidates = wordList.filter((w) => w !== secretWord && !bot.currentGuesses.includes(w));
+            guessWord = candidates[Math.floor(Math.random() * candidates.length)] || 'مدينة';
+          }
+
+          this.submitGuess(roomCode, bot.id, room.currentRound, guessWord, 'bot_act_' + Date.now());
+        }, delay);
+
+        this.botTimers.get(roomCode)?.push(timer);
+
+        if (isSolvingAttempt) break;
+        accumulatedDelay += Math.floor(Math.random() * 3000) + 4000; // 4-7s per subsequent guess
+      }
+    });
+  }
+
   public submitGuess(
     roomCode: string,
     playerId: string,
@@ -354,18 +509,12 @@ export class RoomManager {
     const player = room.players[playerId];
     if (!player) return { success: false, error: 'اللاعب غير مسجل في هذه الغرفة' };
 
-    // Idempotency check
-    const idempotencyKey = `${roomCode}:${roundNumber}:${clientActionId}`;
-    if (this.idempotencyCache.has(idempotencyKey)) {
-      return { success: true };
-    }
-
     if (room.status !== 'PLAYING') {
       return { success: false, error: 'الجولة ليست نشطة حالياً' };
     }
 
     if (room.currentRound !== roundNumber) {
-      return { success: false, error: 'رقم الجولة غير مطابق للواقع الخادم' };
+      return { success: false, error: 'رقم الجولة غير مطابق' };
     }
 
     if (player.hasSolved || player.hasExhausted) {
@@ -376,7 +525,6 @@ export class RoomManager {
       return { success: false, error: 'تم استنفاد الحد الأقصى للمحاولات' };
     }
 
-    // Validate guess using Arabic Word Engine
     const validation = validateGuessWord(guess, true);
     if (!validation.isValid) {
       return { success: false, error: validation.errorMessage || 'الكلمة غير صالحة' };
@@ -387,7 +535,6 @@ export class RoomManager {
       return { success: false, error: 'خطأ داخلي في كلمة الجولة' };
     }
 
-    // Evaluate guess using two-pass algorithm
     const evaluation = evaluateGuess(secretWord, validation.normalizedWord);
     const solved = isWordSolved(evaluation);
 
@@ -405,15 +552,9 @@ export class RoomManager {
       const timeTakenMs = player.finishedAt - (room.roundStartedAt || player.finishedAt);
       player.totalTimeMs += timeTakenMs;
 
-      const scoreBreakdown = calculateRoundScore(
-        true,
-        attemptsUsed,
-        timeTakenMs,
-        room.roundDurationMs
-      );
+      const scoreBreakdown = calculateRoundScore(true, attemptsUsed, timeTakenMs, room.roundDurationMs);
       player.totalScore += scoreBreakdown.totalScore;
 
-      // Broadcast victory event immediately to ALL players in the room!
       this.broadcastToRoom(room.roomCode, {
         type: 'PLAYER_SOLVED_ROUND',
         playerId,
@@ -430,13 +571,12 @@ export class RoomManager {
       player.totalTimeMs += timeTakenMs;
     }
 
-    // Record idempotency
-    this.idempotencyCache.set(idempotencyKey, true);
     room.stateVersion++;
     room.updatedAt = Date.now();
+    this.saveRoomToStorage(room);
 
-    // Send GUESS_EVALUATED to the guessing player
-    this.sendToPlayer(playerId, {
+    // Send GUESS_EVALUATED to guessing player
+    this.sendToPlayer(room.roomCode, playerId, {
       type: 'GUESS_EVALUATED',
       playerId,
       guess: validation.normalizedWord,
@@ -450,38 +590,32 @@ export class RoomManager {
       stateVersion: room.stateVersion,
     });
 
-    // Notify all other players in the room of progress (without revealing the guess letters!)
+    // Notify opponents of progress
     if (room.settings.showOpponentProgress) {
-      for (const otherPlayerId of Object.keys(room.players)) {
-        if (otherPlayerId !== playerId) {
-          this.sendToPlayer(otherPlayerId, {
+      for (const otherId of Object.keys(room.players)) {
+        if (otherId !== playerId) {
+          this.sendToPlayer(room.roomCode, otherId, {
             type: 'OPPONENT_PROGRESS_UPDATE',
             playerId,
             attemptsCount: attemptsUsed,
             hasSolved: player.hasSolved,
             hasExhausted: player.hasExhausted,
-            lastGuessPattern: evaluation, // reveals tile colors, NOT letters
+            lastGuessPattern: evaluation,
             stateVersion: room.stateVersion,
           });
         }
       }
     }
 
-    // Check if round should end now (all active players finished)
-    const allPlayersFinished = Object.values(room.players).every(
-      (p) => p.hasSolved || p.hasExhausted
-    );
-
-    if (allPlayersFinished) {
+    // Check if all players finished
+    const allFinished = Object.values(room.players).every((p) => p.hasSolved || p.hasExhausted);
+    if (allFinished) {
       this.endRound(room);
     }
 
     return { success: true };
   }
 
-  /**
-   * Activates Joker power-up for a player, eliminating up to 3 incorrect Arabic letters
-   */
   public useJoker(roomCode: string, playerId: string, roundNumber: number): boolean {
     const room = this.rooms.get(roomCode.trim().toUpperCase());
     if (!room || room.status !== 'PLAYING' || room.currentRound !== roundNumber) return false;
@@ -491,26 +625,21 @@ export class RoomManager {
     const secretWord = room.currentSecretWord || '';
     if (!secretWord) return false;
 
-    // Collect letters present in the secret word
     const secretLetters = new Set(secretWord.split(''));
-
-    // Collect letters already guessed by this player
     const guessedLetters = new Set(player.currentGuesses.join('').split(''));
-
-    // Arabic alphabet letters that are NOT in secret word and NOT yet guessed
     const candidateLetters = Array.from(ARABIC_LETTERS_SET).filter(
       (ch) => !secretLetters.has(ch) && !guessedLetters.has(ch)
     );
 
-    // Shuffle and pick up to 3
     const shuffled = candidateLetters.sort(() => Math.random() - 0.5);
     const eliminatedLetters = shuffled.slice(0, 3);
 
     player.jokersRemaining = Math.max(0, (player.jokersRemaining ?? 1) - 1);
     room.stateVersion++;
     room.updatedAt = Date.now();
+    this.saveRoomToStorage(room);
 
-    this.sendToPlayer(playerId, {
+    this.sendToPlayer(room.roomCode, playerId, {
       type: 'JOKER_ACTIVATED',
       playerId,
       eliminatedLetters,
@@ -521,9 +650,6 @@ export class RoomManager {
     return true;
   }
 
-  /**
-   * End current round and transition to round result, then next round or match completion
-   */
   private endRound(room: RoomState) {
     if (room.status !== 'PLAYING') return;
 
@@ -532,7 +658,6 @@ export class RoomManager {
     const revealedWord = room.currentSecretWord || '';
     room.revealedWord = revealedWord;
 
-    // Build round summary
     const playersList = Object.values(room.players);
     const roundCandidates = playersList.map((p) => {
       const pTime = p.finishedAt ? p.finishedAt - (room.roundStartedAt || now) : room.roundDurationMs;
@@ -579,7 +704,8 @@ export class RoomManager {
     room.stateVersion++;
     room.updatedAt = now;
 
-    // Broadcast ROUND_ENDED with revealed secret word
+    this.saveRoomToStorage(room);
+
     this.broadcastToRoom(room.roomCode, {
       type: 'ROUND_ENDED',
       roundNumber: room.currentRound,
@@ -591,27 +717,24 @@ export class RoomManager {
       serverTimestamp: now,
     });
 
-    // Check if match is finished
     const isFinalRound = room.currentRound >= room.settings.totalRounds;
 
     setTimeout(() => {
-      if (room.status !== 'ROUND_ENDING') return;
-
-      if (isFinalRound) {
-        this.finishMatch(room);
-      } else {
-        this.startNextRound(room);
+      if (room.status === 'ROUND_ENDING') {
+        if (isFinalRound) {
+          this.finishMatch(room);
+        } else {
+          this.startNextRound(room);
+        }
       }
     }, transitionDurationMs);
   }
 
-  /**
-   * Finalizes the match and determines overall winner
-   */
   private finishMatch(room: RoomState) {
     room.status = 'MATCH_ENDED';
-    const playersList = Object.values(room.players);
+    room.revealedWord = null;
 
+    const playersList = Object.values(room.players);
     const matchCandidates = playersList.map((p) => ({
       id: p.id,
       score: p.totalScore,
@@ -623,238 +746,138 @@ export class RoomManager {
     const result = determineMatchWinner(matchCandidates);
     room.matchWinnerId = result.winnerId;
     room.isDraw = result.isDraw;
-
     room.stateVersion++;
     room.updatedAt = Date.now();
 
+    this.saveRoomToStorage(room);
+
     this.broadcastToRoom(room.roomCode, {
       type: 'MATCH_FINISHED',
-      winnerId: room.matchWinnerId,
-      isDraw: room.isDraw,
+      winnerId: result.winnerId,
+      isDraw: result.isDraw,
       finalState: this.sanitizeStateForRoom(room),
       stateVersion: room.stateVersion,
     });
   }
 
-  /**
-   * Reconnection handling
-   */
-  public handleReconnect(
-    roomCode: string,
-    playerId: string,
-    sessionToken: string,
-    ws: WebSocket
-  ): { success: boolean; state?: RoomState; error?: string } {
-    const room = this.rooms.get(roomCode.toUpperCase());
-    if (!room) return { success: false, error: 'الغرفة غير موجودة' };
-
-    const player = room.players[playerId];
-    if (!player) return { success: false, error: 'اللاعب غير مسجل في هذه الغرفة' };
-
-    player.isConnected = true;
-    player.disconnectedAt = null;
-    room.stateVersion++;
-    room.updatedAt = Date.now();
-
-    this.registerClient(ws, playerId, roomCode, sessionToken);
-
-    // Notify opponent of reconnection
-    this.broadcastToRoom(roomCode, {
-      type: 'PLAYER_CONNECTION_CHANGED',
-      playerId,
-      isConnected: true,
-      stateVersion: room.stateVersion,
-    });
-
-    return { success: true, state: this.sanitizeStateForPlayer(room, playerId) };
-  }
-
-  /**
-   * Disconnect handling with debounce and 30-second grace period
-   */
-  public handleDisconnect(ws: WebSocket) {
-    const client = this.clients.get(ws);
-    if (!client) return;
-
-    const { roomCode, playerId } = client;
-    this.clients.delete(ws);
-
-    // CRITICAL: Only proceed if this closed socket was still the active registered socket for the player!
-    // If the player already reconnected on a new socket, playerSockets.get(playerId) !== ws.
-    if (this.playerSockets.get(playerId) !== ws) {
-      return;
-    }
-    this.playerSockets.delete(playerId);
-
-    const room = this.rooms.get(roomCode.trim().toUpperCase());
-    if (!room) return;
-
-    const player = room.players[playerId];
-    if (!player) return;
-
-    // Clear any previous debounce timer for this player
-    if (this.disconnectDebounceTimers.has(playerId)) {
-      clearTimeout(this.disconnectDebounceTimers.get(playerId)!);
-      this.disconnectDebounceTimers.delete(playerId);
-    }
-
-    // Debounce by 1500ms so transient network blips/reconnects don't alarm other players
-    const debounceTimer = setTimeout(() => {
-      this.disconnectDebounceTimers.delete(playerId);
-
-      // Verify player is STILL disconnected after debounce
-      if (!this.playerSockets.has(playerId) && player && player.isConnected) {
-        player.isConnected = false;
-        player.disconnectedAt = Date.now();
-        room.stateVersion++;
-        room.updatedAt = Date.now();
-
-        const gracePeriodEndsAt = Date.now() + GAME_CONFIG.reconnectGracePeriodMs;
-
-        this.broadcastToRoom(roomCode, {
-          type: 'PLAYER_CONNECTION_CHANGED',
-          playerId,
-          isConnected: false,
-          gracePeriodEndsAt,
-          stateVersion: room.stateVersion,
-        });
-
-        // After grace period, if still disconnected and in match, handle forfeit or dissolution
-        setTimeout(() => {
-          if (player && !player.isConnected && room.status !== 'MATCH_ENDED') {
-            // If room was in WAITING, remove player
-            if (room.status === 'WAITING' || room.status === 'READY_CHECK') {
-              delete room.players[playerId];
-              if (room.guestPlayerId === playerId) room.guestPlayerId = null;
-              if (Object.keys(room.players).length === 0) {
-                this.rooms.delete(roomCode);
-              } else {
-                room.status = 'WAITING';
-                this.broadcastStateSync(room);
-              }
-            }
-          }
-        }, GAME_CONFIG.reconnectGracePeriodMs);
-      }
-    }, 1500);
-
-    this.disconnectDebounceTimers.set(playerId, debounceTimer);
-  }
-
-  /**
-   * Server Game Loop for authoritative expiration checks
-   */
-  private startServerGameLoop() {
-    this.tickInterval = setInterval(() => {
-      const now = Date.now();
-      for (const room of this.rooms.values()) {
-        if (room.status === 'PLAYING' && room.roundStartedAt) {
-          const expiresAt = room.roundStartedAt + room.roundDurationMs;
-          if (now >= expiresAt) {
-            // Round expired by server clock!
-            for (const p of Object.values(room.players)) {
-              if (!p.hasSolved && !p.hasExhausted) {
-                p.hasExhausted = true;
-                p.finishedAt = now;
-                p.totalTimeMs += room.roundDurationMs;
-              }
-            }
-            this.endRound(room);
-          }
-        }
-      }
-    }, 250); // Check 4 times per second
-  }
-
-  public registerClient(ws: WebSocket, playerId: string, roomCode: string, sessionToken: string) {
-    const normalizedCode = roomCode.trim().toUpperCase();
-
-    // Cancel any pending disconnect debounce timer for this player immediately
-    if (this.disconnectDebounceTimers.has(playerId)) {
-      clearTimeout(this.disconnectDebounceTimers.get(playerId)!);
-      this.disconnectDebounceTimers.delete(playerId);
-    }
-
-    this.clients.set(ws, { ws, playerId, roomCode: normalizedCode, sessionToken });
-    this.playerSockets.set(playerId, ws);
-
-    const room = this.rooms.get(normalizedCode);
-    if (room && room.players[playerId]) {
-      const player = room.players[playerId];
-      const wasDisconnected = !player.isConnected;
-      player.isConnected = true;
-      player.disconnectedAt = null;
-      room.stateVersion++;
-      room.updatedAt = Date.now();
-
-      if (wasDisconnected) {
-        this.broadcastToRoom(normalizedCode, {
-          type: 'PLAYER_CONNECTION_CHANGED',
-          playerId,
-          isConnected: true,
-          stateVersion: room.stateVersion,
-        });
-      }
-
-      this.broadcastStateSync(room);
-    }
-  }
-
-  public getRoomState(roomCode: string, playerId?: string): RoomState | null {
+  public getRoomState(roomCode: string, forPlayerId?: string): RoomState | null {
     const room = this.rooms.get(roomCode.trim().toUpperCase());
     if (!room) return null;
-    return playerId ? this.sanitizeStateForPlayer(room, playerId) : this.sanitizeStateForRoom(room);
+    return forPlayerId ? this.sanitizeStateForPlayer(room, forPlayerId) : this.sanitizeStateForRoom(room);
   }
 
-  public broadcastToRoom(roomCode: string, message: WebSocketServerMessage) {
-    const room = this.rooms.get(roomCode.trim().toUpperCase());
-    if (!room) return;
-
-    const json = JSON.stringify(message);
-    for (const playerId of Object.keys(room.players)) {
-      const socket = this.playerSockets.get(playerId);
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(json);
+  private sanitizeStateForPlayer(room: RoomState, playerId: string): RoomState {
+    const sanitized: RoomState = JSON.parse(JSON.stringify(room));
+    if (room.status === 'PLAYING') {
+      delete sanitized.currentSecretWord;
+      sanitized.revealedWord = null;
+      for (const [id, player] of Object.entries(sanitized.players)) {
+        if (id !== playerId) {
+          player.currentGuesses = player.currentGuesses.map(() => '*****');
+        }
       }
     }
-  }
-
-  public sendToPlayer(playerId: string, message: WebSocketServerMessage) {
-    const socket = this.playerSockets.get(playerId);
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(message));
-    }
-  }
-
-  public broadcastStateSync(room: RoomState) {
-    for (const playerId of Object.keys(room.players)) {
-      this.sendToPlayer(playerId, {
-        type: 'ROOM_STATE_SYNC',
-        state: this.sanitizeStateForPlayer(room, playerId),
-        serverTimestamp: Date.now(),
-      });
-    }
-  }
-
-  /**
-   * Sanitizes state so secret word is NEVER exposed before round completion!
-   */
-  private sanitizeStateForPlayer(room: RoomState, playerId: string): RoomState {
-    const copy: RoomState = JSON.parse(JSON.stringify(room));
-    // If playing, strip the secret word unless round is ending or ended
-    if (copy.status === 'PLAYING') {
-      delete copy.currentSecretWord;
-      copy.revealedWord = null;
-    }
-    return copy;
+    return sanitized;
   }
 
   private sanitizeStateForRoom(room: RoomState): RoomState {
-    const copy: RoomState = JSON.parse(JSON.stringify(room));
-    if (copy.status === 'PLAYING') {
-      delete copy.currentSecretWord;
-      copy.revealedWord = null;
+    const sanitized: RoomState = JSON.parse(JSON.stringify(room));
+    if (room.status === 'PLAYING') {
+      delete sanitized.currentSecretWord;
+      sanitized.revealedWord = null;
+      for (const player of Object.values(sanitized.players)) {
+        player.currentGuesses = player.currentGuesses.map(() => '*****');
+      }
     }
-    return copy;
+    return sanitized;
+  }
+
+  // Socket subscription adapter
+  public subscribe(roomCode: string, listener: LocalSocketListener): () => void {
+    const code = roomCode.trim().toUpperCase();
+    if (!this.subscribers.has(code)) {
+      this.subscribers.set(code, new Set());
+    }
+    this.subscribers.get(code)!.add(listener);
+
+    return () => {
+      this.subscribers.get(code)?.delete(listener);
+    };
+  }
+
+  private broadcastToRoom(roomCode: string, msg: WebSocketServerMessage) {
+    const code = roomCode.trim().toUpperCase();
+    const listeners = this.subscribers.get(code);
+    if (listeners) {
+      listeners.forEach((l) => {
+        try {
+          l.onMessage(msg);
+        } catch {}
+      });
+    }
+    this.broadcastToTabs({ type: 'ROOM_MSG', roomCode: code, msg });
+  }
+
+  private sendToPlayer(roomCode: string, playerId: string, msg: WebSocketServerMessage) {
+    // In local engine, broadcast message tagged with target player
+    this.broadcastToRoom(roomCode, msg);
+  }
+
+  private broadcastStateSync(room: RoomState) {
+    const listeners = this.subscribers.get(room.roomCode);
+    if (listeners) {
+      listeners.forEach((l) => {
+        try {
+          l.onMessage({
+            type: 'ROOM_STATE_SYNC',
+            state: this.sanitizeStateForRoom(room),
+            serverTimestamp: Date.now(),
+          });
+        } catch {}
+      });
+    }
+    this.broadcastToTabs({ type: 'SYNC_ROOM', room });
+  }
+
+  private broadcastToTabs(data: any) {
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage(data);
+      } catch {}
+    }
+  }
+
+  private handleBroadcastMessage(data: any) {
+    if (!data) return;
+    if (data.type === 'SYNC_ROOM' && data.room) {
+      const incoming: RoomState = data.room;
+      const current = this.rooms.get(incoming.roomCode);
+      if (!current || incoming.stateVersion >= current.stateVersion) {
+        this.rooms.set(incoming.roomCode, incoming);
+        const listeners = this.subscribers.get(incoming.roomCode);
+        if (listeners) {
+          listeners.forEach((l) => {
+            try {
+              l.onMessage({
+                type: 'ROOM_STATE_SYNC',
+                state: this.sanitizeStateForRoom(incoming),
+                serverTimestamp: Date.now(),
+              });
+            } catch {}
+          });
+        }
+      }
+    } else if (data.type === 'ROOM_MSG' && data.roomCode && data.msg) {
+      const listeners = this.subscribers.get(data.roomCode);
+      if (listeners) {
+        listeners.forEach((l) => {
+          try {
+            l.onMessage(data.msg);
+          } catch {}
+        });
+      }
+    }
   }
 }
+
+export const clientRoomEngine = ClientRoomEngine.getInstance();

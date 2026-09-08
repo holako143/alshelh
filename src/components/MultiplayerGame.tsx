@@ -12,7 +12,7 @@ import { WinnerAlertBanner } from './WinnerAlertBanner';
 import { SolveAnnouncement } from '../hooks/useMultiplayerSocket';
 import { soundManager } from '../lib/audio';
 import { fireSolveConfetti } from '../lib/confetti';
-import { WifiOff, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { WifiOff, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 
 interface MultiplayerGameProps {
   roomState: RoomState;
@@ -38,6 +38,10 @@ interface MultiplayerGameProps {
   onDismissSolveAnnouncement?: () => void;
   onUseJoker?: () => void;
   eliminatedLetters?: string[];
+  latencyMs?: number | null;
+  isReconnecting?: boolean;
+  onAddBot?: () => void;
+  onRemoveBot?: () => void;
 }
 
 export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
@@ -64,11 +68,46 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
   onDismissSolveAnnouncement,
   onUseJoker,
   eliminatedLetters = [],
+  latencyMs,
+  isReconnecting,
+  onAddBot,
+  onRemoveBot,
 }) => {
   const [currentGuess, setCurrentGuess] = useState<string>('');
   const [isShaking, setIsShaking] = useState<boolean>(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [letterStatuses, setLetterStatuses] = useState<Record<string, TileState>>({});
+
+  // Unified Server Timestamp Synchronization
+  const [serverTime, setServerTime] = useState<number>(() => getServerNow());
+
+  useEffect(() => {
+    const updateTime = () => {
+      setServerTime(getServerNow());
+    };
+    updateTime();
+    // 50ms interval ensures accurate real-time clock and instantaneous input locking upon round expiry
+    const interval = setInterval(updateTime, 50);
+    return () => clearInterval(interval);
+  }, [getServerNow]);
+
+  // Derived authoritative round boundaries based on unified server timestamps
+  const roundStartedAt = roomState.roundStartedAt;
+  const roundDurationMs = roomState.roundDurationMs;
+  const roundEndsAt = roundStartedAt ? roundStartedAt + roundDurationMs : null;
+
+  const isPlaying = roomState.status === 'PLAYING';
+  const hasRoundStarted = roundStartedAt ? serverTime >= roundStartedAt : true;
+  const isTimeExpired = Boolean(
+    isPlaying && roundEndsAt && serverTime >= roundEndsAt
+  );
+
+  const timeRemainingMs = roundEndsAt ? Math.max(0, roundEndsAt - serverTime) : 0;
+  const remainingSeconds = Math.ceil(timeRemainingMs / 1000);
+  const progressPercent =
+    roundDurationMs > 0
+      ? Math.min(100, Math.max(0, (timeRemainingMs / roundDurationMs) * 100))
+      : 0;
 
   const playerList = allPlayers && allPlayers.length > 0
     ? allPlayers
@@ -91,11 +130,11 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
     }
   }, [solveAnnouncement]);
 
-  // Reset guess input and key statuses on round change
+  // Reset guess input and key statuses on round change or roundStartedAt update
   useEffect(() => {
     setCurrentGuess('');
     setLocalError(null);
-  }, [roomState.currentRound]);
+  }, [roomState.currentRound, roomState.roundStartedAt]);
 
   // Compute key statuses from player's current evaluations
   useEffect(() => {
@@ -134,7 +173,7 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
   const handleChar = (char: string) => {
     if (!myPlayerState) return;
     if (myPlayerState.hasSolved || myPlayerState.hasExhausted) return;
-    if (roomState.status !== 'PLAYING') return;
+    if (!isPlaying || !hasRoundStarted || isTimeExpired) return;
     if (currentGuess.length >= roomState.settings.wordLength) return;
 
     setCurrentGuess((prev) => prev + char);
@@ -144,7 +183,7 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
   const handleDelete = () => {
     if (!myPlayerState) return;
     if (myPlayerState.hasSolved || myPlayerState.hasExhausted) return;
-    if (roomState.status !== 'PLAYING') return;
+    if (!isPlaying || !hasRoundStarted || isTimeExpired) return;
 
     setCurrentGuess((prev) => prev.slice(0, -1));
     setLocalError(null);
@@ -153,7 +192,19 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
   const handleEnter = () => {
     if (!myPlayerState) return;
     if (myPlayerState.hasSolved || myPlayerState.hasExhausted) return;
-    if (roomState.status !== 'PLAYING') return;
+    if (!isPlaying) return;
+
+    if (!hasRoundStarted) {
+      setLocalError('تبدأ الجولة بعد لحظات...');
+      triggerShake();
+      return;
+    }
+
+    if (isTimeExpired) {
+      setLocalError('انتهى وقت الجولة الرسمي حسب توقيت الخادم!');
+      triggerShake();
+      return;
+    }
 
     if (currentGuess.length < roomState.settings.wordLength) {
       setLocalError(`يجب إكمال ${roomState.settings.wordLength} أحرف أولاً`);
@@ -199,6 +250,9 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
             onStartMatch={onStartMatch}
             onLeave={onLeave}
             countdownEndsAt={roomState.countdownEndsAt}
+            getServerNow={getServerNow}
+            onAddBot={onAddBot}
+            onRemoveBot={onRemoveBot}
           />
         </main>
       </div>
@@ -211,7 +265,9 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
       : null;
 
   const isInputDisabled =
-    roomState.status !== 'PLAYING' ||
+    !isPlaying ||
+    !hasRoundStarted ||
+    isTimeExpired ||
     Boolean(myPlayerState?.hasSolved) ||
     Boolean(myPlayerState?.hasExhausted);
 
@@ -235,6 +291,8 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
         player1Score={myPlayerState?.totalScore}
         player2Score={opponentPlayerState?.totalScore}
         playerCount={playerList.length}
+        latencyMs={latencyMs}
+        isReconnecting={isReconnecting}
       />
 
       {/* Real-time Winner Notification Broadcast to All Players */}
@@ -254,10 +312,28 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
         </div>
       )}
 
+      {/* Synchronized Round Time Bar (Unified across all competitors via Server Timestamp) */}
+      {isPlaying && roundStartedAt && (
+        <div className="w-full max-w-4xl mx-auto px-2 sm:px-4 pt-1">
+          <div className="w-full bg-white/[0.08] rounded-full h-1.5 overflow-hidden backdrop-blur-xs">
+            <div
+              className={`h-full transition-all duration-100 ease-linear rounded-full ${
+                remainingSeconds <= 5
+                  ? 'bg-gradient-to-r from-rose-500 to-red-600 animate-pulse'
+                  : remainingSeconds <= 15
+                  ? 'bg-gradient-to-r from-amber-400 to-orange-500'
+                  : 'bg-gradient-to-r from-emerald-400 to-teal-500'
+              }`}
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Active Game Arena */}
-      <main className="flex-1 flex flex-col justify-between max-w-4xl mx-auto w-full px-2 py-2">
+      <main className="flex-1 min-h-0 flex flex-col justify-between max-w-4xl mx-auto w-full px-1.5 sm:px-2 py-1 sm:py-2">
         {/* Opponent status & local feedback bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-2">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-1.5 sm:gap-2 px-1 sm:px-2">
           <div className="w-full sm:w-auto">
             <OpponentProgress
               opponent={opponentPlayerState}
@@ -284,6 +360,20 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
               </div>
             )}
 
+            {isTimeExpired && !myPlayerState?.hasSolved && !myPlayerState?.hasExhausted && (
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/20 backdrop-blur-md border border-amber-400/30 text-amber-300 font-bold text-xs shadow-lg animate-pulse">
+                <Clock className="w-4 h-4" />
+                <span>انتهى وقت الجولة الرسمي! جاري احتساب النتائج...</span>
+              </div>
+            )}
+
+            {!hasRoundStarted && isPlaying && (
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/20 backdrop-blur-md border border-blue-400/30 text-blue-300 font-bold text-xs shadow-lg animate-pulse">
+                <Clock className="w-4 h-4" />
+                <span>تبدأ الجولة خلال لحظات متزامنة...</span>
+              </div>
+            )}
+
             {(localError || lastError) && (
               <div className="bg-rose-500/80 backdrop-blur-md border border-rose-300/40 text-white text-xs font-bold py-1.5 px-3.5 rounded-xl shadow-lg">
                 {localError || lastError}
@@ -294,17 +384,17 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
 
         {/* Semantic Hint Card for Easy Guessing & Fun Participation */}
         {roomState.status === 'PLAYING' && roomState.currentHint && (
-          <div className="px-2 my-1.5">
+          <div className="px-1 sm:px-2 my-1">
             <HintCard
               hint={roomState.currentHint}
               attemptsCount={myPlayerState?.currentGuesses.length || 0}
-              initialExpanded={true}
+              initialExpanded={false}
             />
           </div>
         )}
 
         {/* Wordle Board */}
-        <div className="flex items-center justify-center my-auto py-2">
+        <div className="flex items-center justify-center my-auto py-1 sm:py-2">
           <GameBoard
             guesses={myPlayerState?.currentGuesses || []}
             evaluations={myPlayerState?.currentEvaluations || []}
@@ -338,6 +428,7 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
           roundNumber={roomState.currentRound}
           totalRounds={roomState.settings.totalRounds}
           transitionEndsAt={roomState.transitionEndsAt}
+          getServerNow={getServerNow}
           myPlayerId={myPlayerId}
           players={playerList.map((p) => ({ id: p.id, nickname: p.nickname }))}
           player1={{

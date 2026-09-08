@@ -58,35 +58,35 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       let hasSweep = false;
 
       if (isSubmitted) {
-        const staggerDelay = `${colIndex * 100}ms`;
+        const staggerDelay = `${colIndex * 120}ms`;
 
         if (isRowSolved) {
           bgClass =
-            'bg-gradient-to-b from-emerald-400 via-emerald-500 to-teal-600 border-2 border-emerald-200 text-white font-black shadow-lg shadow-emerald-500/50 animate-glow-pulse';
+            'bg-gradient-to-b from-emerald-400 via-emerald-500 to-teal-600 border-2 border-emerald-200 text-white font-black shadow-xl shadow-emerald-500/50 animate-glow-pulse';
           animClass = 'animate-winner-wave';
           animStyle = { animationDelay: `${colIndex * 100}ms` };
           hasSweep = true;
-          if (colorBlindMode) icon = <Check className="w-3 h-3 absolute top-1 left-1 text-white opacity-95" />;
+          if (colorBlindMode) icon = <Check className="w-3.5 h-3.5 absolute top-1.5 left-1.5 text-white opacity-95" />;
         } else if (state === 'CORRECT') {
           bgClass =
-            'bg-gradient-to-b from-emerald-500 via-emerald-600 to-teal-700 border-2 border-emerald-300/80 text-white font-black shadow-md shadow-emerald-500/40 ring-1 ring-emerald-300/30';
+            'bg-gradient-to-b from-emerald-500 via-emerald-600 to-teal-700 border-2 border-emerald-300/80 text-white font-black shadow-lg shadow-emerald-500/40 ring-1 ring-emerald-300/30';
           animClass = 'animate-correct-bounce';
           animStyle = { animationDelay: staggerDelay };
           hasSweep = true;
-          if (colorBlindMode) icon = <Check className="w-2.5 h-2.5 absolute top-1 left-1 opacity-80" />;
+          if (colorBlindMode) icon = <Check className="w-3 h-3 absolute top-1.5 left-1.5 opacity-80" />;
         } else if (state === 'PRESENT') {
           bgClass =
-            'bg-gradient-to-b from-amber-500 via-amber-600 to-orange-600 border-2 border-amber-300/70 text-white font-black shadow-md shadow-amber-500/30';
+            'bg-gradient-to-b from-amber-500 via-amber-600 to-orange-600 border-2 border-amber-300/70 text-white font-black shadow-lg shadow-amber-500/30';
           animClass = 'animate-tile-pop';
           animStyle = { animationDelay: staggerDelay };
-          if (colorBlindMode) icon = <Waves className="w-2.5 h-2.5 absolute top-1 left-1 opacity-80" />;
+          if (colorBlindMode) icon = <Waves className="w-3 h-3 absolute top-1.5 left-1.5 opacity-80" />;
         } else {
           bgClass = 'bg-white/[0.03] backdrop-blur-md border border-white/5 text-white/30 font-medium';
-          if (colorBlindMode) icon = <X className="w-2.5 h-2.5 absolute top-1 left-1 opacity-40" />;
+          if (colorBlindMode) icon = <X className="w-3 h-3 absolute top-1.5 left-1.5 opacity-40" />;
         }
       } else if (isCurrent && char) {
         bgClass =
-          'bg-white/[0.14] backdrop-blur-md border-2 border-emerald-400/80 text-white font-black scale-105 shadow-md shadow-emerald-500/20';
+          'bg-white/[0.14] backdrop-blur-md border-2 border-emerald-400/80 text-white font-black scale-105 shadow-lg shadow-emerald-500/20';
         animClass = 'animate-tile-pop';
       }
 
@@ -95,7 +95,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           key={colIndex}
           id={`tile-r${rowIndex}-c${colIndex}`}
           style={animStyle}
-          className={`relative overflow-hidden w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-xl flex items-center justify-center text-lg sm:text-xl font-bold select-none transition-colors duration-200 ${bgClass} ${animClass}`}
+          className={`relative overflow-hidden w-9 h-9 xs:w-10 xs:h-10 sm:w-12 sm:h-12 md:w-13 md:h-13 rounded-xl sm:rounded-2xl flex items-center justify-center text-lg xs:text-xl sm:text-2xl font-bold select-none transition-colors duration-200 ${bgClass} ${animClass}`}
         >
           {hasSweep && <span className="light-sweep-beam" />}
           {icon}
@@ -118,7 +118,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   }
 
   return (
-    <div id="game-board-container" className="flex flex-col gap-1 sm:gap-1.5 justify-center my-auto py-0.5">
+    <div id="game-board-container" className="flex flex-col gap-1 sm:gap-1.5 justify-center my-auto py-1">
       {rows}
     </div>
   );

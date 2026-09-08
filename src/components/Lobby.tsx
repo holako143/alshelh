@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GameSettings } from '../shared/types';
 import { DEFAULT_GAME_SETTINGS, GAME_CONFIG } from '../shared/constants';
 import { THEME_DEFINITIONS } from '../game-engine/words-data';
@@ -14,6 +14,7 @@ interface LobbyProps {
   onOpenDailyChallenge?: () => void;
   isLoading?: boolean;
   errorMessage?: string | null;
+  initialRoomCode?: string;
 }
 
 export const Lobby: React.FC<LobbyProps> = ({
@@ -26,10 +27,18 @@ export const Lobby: React.FC<LobbyProps> = ({
   onOpenDailyChallenge,
   isLoading = false,
   errorMessage = null,
+  initialRoomCode = '',
 }) => {
   const [activeTab, setActiveTab] = useState<'create' | 'join' | 'solo'>('create');
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [settings, setSettings] = useState<GameSettings>(DEFAULT_GAME_SETTINGS);
+
+  useEffect(() => {
+    if (initialRoomCode) {
+      setActiveTab('join');
+      setRoomCodeInput(initialRoomCode.trim().toUpperCase());
+    }
+  }, [initialRoomCode]);
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,10 +46,22 @@ export const Lobby: React.FC<LobbyProps> = ({
     onCreateRoom(settings);
   };
 
+  const sanitizeRoomCode = (raw: string) => {
+    let clean = raw.trim().toUpperCase();
+    if (clean.includes('ROOM=')) {
+      const match = clean.match(/ROOM=([A-Z0-9]{5})/i);
+      if (match) clean = match[1].toUpperCase();
+    } else {
+      clean = clean.replace(/[^A-Z0-9]/gi, '').slice(0, 5).toUpperCase();
+    }
+    return clean;
+  };
+
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!roomCodeInput.trim() || !nickname.trim()) return;
-    onJoinRoom(roomCodeInput.trim().toUpperCase());
+    const clean = sanitizeRoomCode(roomCodeInput);
+    if (!clean || !nickname.trim()) return;
+    onJoinRoom(clean);
   };
 
   return (
@@ -318,27 +339,57 @@ export const Lobby: React.FC<LobbyProps> = ({
 
       {/* Tab 2: Join Room */}
       {activeTab === 'join' && (
-        <form onSubmit={handleJoin} className="bg-white/[0.04] backdrop-blur-2xl rounded-3xl p-6 border border-white/10 shadow-2xl flex flex-col gap-4 text-right">
+        <form onSubmit={handleJoin} className="bg-white/[0.04] backdrop-blur-2xl rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-white/10 shadow-2xl flex flex-col gap-4 text-right">
           <div className="flex flex-col gap-2">
-            <label htmlFor="input-room-code" className="text-xs font-bold text-white/80">
-              أدخل رمز الغرفة المكون من 5 أحرف
-            </label>
-            <input
-              id="input-room-code"
-              type="text"
-              maxLength={5}
-              value={roomCodeInput}
-              onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
-              placeholder="مثال: AB7KQ"
-              className="w-full text-center tracking-widest text-2xl font-mono font-black py-3.5 px-4 rounded-2xl border border-white/20 bg-white/[0.05] text-emerald-400 placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 uppercase backdrop-blur-md"
-            />
+            <div className="flex items-center justify-between">
+              <label htmlFor="input-room-code" className="text-xs font-bold text-white/80">
+                أدخل رمز الغرفة المكون من 5 أحرف
+              </label>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    if (navigator.clipboard) {
+                      const text = await navigator.clipboard.readText();
+                      const code = sanitizeRoomCode(text);
+                      if (code) setRoomCodeInput(code);
+                    }
+                  } catch {}
+                }}
+                className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-0.5 rounded-lg border border-emerald-500/20 transition-all cursor-pointer"
+              >
+                لصق الرمز
+              </button>
+            </div>
+
+            <div className="relative">
+              <input
+                id="input-room-code"
+                type="text"
+                maxLength={60}
+                value={roomCodeInput}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val.length > 5) {
+                    setRoomCodeInput(sanitizeRoomCode(val));
+                  } else {
+                    setRoomCodeInput(val.toUpperCase());
+                  }
+                }}
+                placeholder="مثال: AB7KQ"
+                className="w-full text-center tracking-widest text-2xl font-mono font-black py-3 px-4 rounded-xl sm:rounded-2xl border border-white/20 bg-white/[0.05] text-emerald-400 placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 uppercase backdrop-blur-md"
+              />
+            </div>
+            <p className="text-[11px] text-white/50 text-center">
+              يمكنك كتابة الرمز المكون من 5 أحرف أو لصق رابط الدعوة بالكامل
+            </p>
           </div>
 
           <button
             id="btn-submit-join-room"
             type="submit"
-            disabled={isLoading || roomCodeInput.length !== 5 || !nickname.trim()}
-            className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-white font-black text-sm shadow-xl shadow-emerald-500/25 border border-white/20 transition-all active:scale-98 disabled:opacity-40 cursor-pointer mt-2"
+            disabled={isLoading || sanitizeRoomCode(roomCodeInput).length !== 5 || !nickname.trim()}
+            className="w-full py-3.5 sm:py-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-white font-black text-sm shadow-xl shadow-emerald-500/25 border border-white/20 transition-all active:scale-98 disabled:opacity-40 cursor-pointer mt-1"
           >
             {isLoading ? 'جارٍ الانضمام...' : 'الانضمام للغرفة الآن'}
           </button>

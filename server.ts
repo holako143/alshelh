@@ -83,13 +83,50 @@ async function startServer() {
 
   // Create HTTP server
   const server = http.createServer(app);
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
 
-  // 2. WEBSOCKET SERVER ATTACHMENT
-  const wss = new WebSocketServer({ server, path: '/ws' });
+  // 2. WEBSOCKET SERVER ATTACHMENT WITH HEARTBEAT KEEPALIVE
+  interface ExtWebSocket extends WebSocket {
+    isAlive?: boolean;
+  }
+
+  const wss = new WebSocketServer({
+    server,
+    path: '/ws',
+    clientTracking: true,
+    maxPayload: 64 * 1024,
+  });
+
+  // Heartbeat loop every 8s prevents idle timeouts on Cloud Run/NGINX and purges dead sockets
+  const heartbeatInterval = setInterval(() => {
+    wss.clients.forEach((client: WebSocket) => {
+      const extWs = client as ExtWebSocket;
+      if (extWs.isAlive === false) {
+        return client.terminate();
+      }
+      extWs.isAlive = false;
+      try {
+        client.ping();
+      } catch {}
+    });
+  }, 8000);
+
+  wss.on('close', () => {
+    clearInterval(heartbeatInterval);
+  });
 
   wss.on('connection', (ws: WebSocket) => {
+    const extWs = ws as ExtWebSocket;
+    extWs.isAlive = true;
+
+    ws.on('pong', () => {
+      extWs.isAlive = true;
+    });
+
     ws.on('message', (rawData: string) => {
       try {
+        extWs.isAlive = true;
         const message: WebSocketClientMessage = JSON.parse(rawData.toString());
 
         switch (message.type) {
@@ -106,9 +143,11 @@ async function startServer() {
 
           case 'JOIN_ROOM': {
             const { roomCode, playerId, nickname, sessionToken } = message;
-            const joinResult = roomManager.joinRoom(roomCode, playerId, nickname, sessionToken);
+            const normalizedCode = roomCode.trim().toUpperCase();
+            // Register socket first so state sync and notifications reach it immediately
+            roomManager.registerClient(ws, playerId, normalizedCode, sessionToken);
+            const joinResult = roomManager.joinRoom(normalizedCode, playerId, nickname, sessionToken);
             if (joinResult.success && joinResult.state) {
-              roomManager.registerClient(ws, playerId, roomCode.toUpperCase(), sessionToken);
               ws.send(
                 JSON.stringify({
                   type: 'ROOM_STATE_SYNC',
@@ -130,7 +169,9 @@ async function startServer() {
 
           case 'RECONNECT': {
             const { roomCode, playerId, sessionToken } = message;
-            const reconnectResult = roomManager.handleReconnect(roomCode, playerId, sessionToken, ws);
+            const normalizedCode = roomCode.trim().toUpperCase();
+            roomManager.registerClient(ws, playerId, normalizedCode, sessionToken);
+            const reconnectResult = roomManager.handleReconnect(normalizedCode, playerId, sessionToken, ws);
             if (reconnectResult.success && reconnectResult.state) {
               ws.send(
                 JSON.stringify({

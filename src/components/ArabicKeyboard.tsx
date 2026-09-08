@@ -11,6 +11,7 @@ interface ArabicKeyboardProps {
   letterStatuses: Record<string, TileState>;
   disabled?: boolean;
   onUseJoker?: () => void;
+  jokersAvailable?: number;
   jokersRemaining?: number;
   jokerDisabled?: boolean;
 }
@@ -22,18 +23,11 @@ export const ArabicKeyboard: React.FC<ArabicKeyboardProps> = ({
   letterStatuses,
   disabled = false,
   onUseJoker,
-  jokersRemaining = 0,
+  jokersAvailable = 0,
+  jokersRemaining,
   jokerDisabled = false,
 }) => {
-  // Trigger light haptic vibration on mobile
-  const triggerHaptic = useCallback(() => {
-    if (typeof window !== 'undefined' && 'navigator' in window && window.navigator.vibrate) {
-      try {
-        window.navigator.vibrate(12);
-      } catch {}
-    }
-  }, []);
-
+  const actualJokers = jokersRemaining !== undefined ? jokersRemaining : jokersAvailable;
   // Physical keyboard listener
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -42,21 +36,18 @@ export const ArabicKeyboard: React.FC<ArabicKeyboardProps> = ({
       if (e.key === 'Enter') {
         e.preventDefault();
         soundManager.playKeypress();
-        triggerHaptic();
         onEnter();
       } else if (e.key === 'Backspace') {
         e.preventDefault();
         soundManager.playBackspace();
-        triggerHaptic();
         onDelete();
       } else if (ARABIC_LETTERS_SET.has(e.key)) {
         e.preventDefault();
         soundManager.playKeypress();
-        triggerHaptic();
         onChar(e.key);
       }
     },
-    [disabled, onChar, onDelete, onEnter, triggerHaptic]
+    [disabled, onChar, onDelete, onEnter]
   );
 
   useEffect(() => {
@@ -67,43 +58,41 @@ export const ArabicKeyboard: React.FC<ArabicKeyboardProps> = ({
   const getKeyColor = (char: string): string => {
     const status = letterStatuses[char];
     if (status === 'CORRECT') {
-      return 'bg-gradient-to-b from-emerald-400 to-emerald-600 text-white border-emerald-300 shadow-sm shadow-emerald-500/40 font-black scale-102';
+      return 'bg-gradient-to-b from-emerald-400 to-emerald-600 backdrop-blur-md text-white border-emerald-300 shadow-md shadow-emerald-500/40 ring-2 ring-emerald-300/40 font-black scale-102';
     }
     if (status === 'PRESENT') {
-      return 'bg-gradient-to-b from-amber-400 to-orange-500 text-white border-amber-300 shadow-sm shadow-amber-500/30 font-black scale-102';
+      return 'bg-gradient-to-b from-amber-400 to-orange-500 backdrop-blur-md text-white border-amber-300 shadow-md shadow-amber-500/30 ring-1 ring-amber-300/30 font-black scale-102';
     }
     if (status === 'ABSENT') {
-      return 'bg-white/[0.02] text-white/20 border-white/5 opacity-40 line-through';
+      return 'bg-white/[0.02] backdrop-blur-xs text-white/20 border-white/5 opacity-50 line-through';
     }
-    return 'bg-white/[0.08] text-white/90 active:bg-white/[0.22] hover:bg-white/[0.16] border-white/10 shadow-xs';
+    return 'bg-white/[0.08] backdrop-blur-md text-white/90 hover:bg-white/[0.16] border-white/10 hover:border-white/25 shadow-xs';
   };
 
   return (
-    <div id="arabic-keyboard" className="w-full max-w-xl mx-auto px-1 select-none touch-manipulation">
-      {/* Joker Power-up Toolbar */}
+    <div id="arabic-keyboard" className="w-full max-w-2xl mx-auto px-1 select-none touch-manipulation">
+      {/* Optional Joker power-up toolbar */}
       {onUseJoker && (
-        <div className="flex items-center justify-between pb-1 px-1 text-right">
+        <div className="flex items-center justify-between pb-1.5 px-2">
           <button
             id="btn-use-joker-powerup"
             type="button"
-            disabled={disabled || jokerDisabled || jokersRemaining <= 0}
-            onClick={() => {
-              triggerHaptic();
-              onUseJoker();
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-purple-500/80 via-pink-500/80 to-purple-600/80 text-white border border-purple-300/40 shadow-sm shadow-purple-500/20 active:scale-95 transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+            disabled={disabled || jokerDisabled || actualJokers <= 0}
+            onClick={onUseJoker}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-purple-500/80 via-pink-500/80 to-purple-600/80 text-white border border-purple-300/40 shadow-md shadow-purple-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
             title="حذف 3 أحرف خاطئة من اللوحة للمساعدة"
           >
             <Wand2 className="w-3.5 h-3.5 text-yellow-300 animate-pulse" />
-            <span>الجوكر 🃏 ({jokersRemaining} متبقي)</span>
+            <span>الجوكر 🃏 ({actualJokers} متبقي)</span>
+            <span className="text-[10px] bg-white/20 px-1.5 py-0.2 rounded-md">حذف 3 أحرف</span>
           </button>
-          <span className="text-[10px] text-white/40 font-medium">لوحة مفاتيح الجوال التفاعلية</span>
+          <span className="text-[10px] text-white/50">لوحة المفاتيح التفاعلية</span>
         </div>
       )}
 
       <div className="flex flex-col gap-1 sm:gap-1.5">
         {ARABIC_KEYBOARD_LAYOUT.map((row, rowIndex) => (
-          <div key={rowIndex} className="flex justify-center items-center gap-0.5 sm:gap-1 w-full">
+          <div key={rowIndex} className="flex justify-center items-center gap-0.5 xs:gap-1 sm:gap-1.5 w-full">
             {row.map((key) => {
               const isEnter = key === 'ENTER';
               const isBackspace = key === 'BACKSPACE';
@@ -117,14 +106,13 @@ export const ArabicKeyboard: React.FC<ArabicKeyboardProps> = ({
                     disabled={disabled}
                     onClick={() => {
                       soundManager.playKeypress();
-                      triggerHaptic();
                       onEnter();
                     }}
-                    className="flex-1 max-w-[4rem] h-10 sm:h-12 rounded-xl font-bold text-xs bg-emerald-500/90 active:bg-emerald-400 text-white flex items-center justify-center gap-1 transition-all disabled:opacity-40 disabled:pointer-events-none shadow-md shadow-emerald-500/20 border border-emerald-300/30 cursor-pointer"
+                    className="flex-[1.3] sm:flex-[1.5] max-w-[3.6rem] sm:max-w-[4.5rem] h-10 sm:h-12 px-1 rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-xs bg-emerald-500/90 hover:bg-emerald-400 active:scale-95 text-white flex items-center justify-center gap-0.5 sm:gap-1 transition-all disabled:opacity-40 disabled:pointer-events-none shadow-md shadow-emerald-500/25 border border-emerald-300/30 backdrop-blur-md cursor-pointer select-none"
                     aria-label="إدخال التخمين"
                   >
                     <span>إدخال</span>
-                    <CornerDownLeft className="w-3 h-3" />
+                    <CornerDownLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   </button>
                 );
               }
@@ -138,13 +126,12 @@ export const ArabicKeyboard: React.FC<ArabicKeyboardProps> = ({
                     disabled={disabled}
                     onClick={() => {
                       soundManager.playBackspace();
-                      triggerHaptic();
                       onDelete();
                     }}
-                    className="flex-1 max-w-[3.5rem] h-10 sm:h-12 rounded-xl font-bold text-xs bg-white/[0.08] active:bg-white/[0.2] text-white/90 flex items-center justify-center transition-all disabled:opacity-40 disabled:pointer-events-none border border-white/10 cursor-pointer"
+                    className="flex-[1.1] sm:flex-[1.2] max-w-[3rem] sm:max-w-[3.8rem] h-10 sm:h-12 px-1 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm bg-white/[0.08] hover:bg-white/[0.16] active:scale-95 text-white/90 flex items-center justify-center transition-all disabled:opacity-40 disabled:pointer-events-none shadow-xs border border-white/10 backdrop-blur-md cursor-pointer select-none"
                     aria-label="حذف الحرف"
                   >
-                    <Delete className="w-4 h-4" />
+                    <Delete className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
                 );
               }
@@ -157,10 +144,9 @@ export const ArabicKeyboard: React.FC<ArabicKeyboardProps> = ({
                   disabled={disabled}
                   onClick={() => {
                     soundManager.playKeypress();
-                    triggerHaptic();
                     onChar(key);
                   }}
-                  className={`flex-1 min-w-[1.65rem] sm:min-w-8 h-10 sm:h-12 rounded-xl font-bold text-sm sm:text-base border flex items-center justify-center transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer ${getKeyColor(
+                  className={`flex-1 min-w-0 h-10 sm:h-12 px-0.5 rounded-lg sm:rounded-xl font-bold text-sm xs:text-base sm:text-lg border flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 disabled:pointer-events-none cursor-pointer select-none ${getKeyColor(
                     key
                   )}`}
                   aria-label={`حرف ${key}`}

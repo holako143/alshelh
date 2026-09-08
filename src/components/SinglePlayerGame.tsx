@@ -161,7 +161,7 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
   };
 
   return (
-    <div id="single-player-container" className="flex flex-col flex-1 max-w-lg mx-auto w-full px-2 py-3 justify-between">
+    <div id="single-player-container" className="flex flex-col flex-1 min-h-0 max-w-lg mx-auto w-full px-1.5 sm:px-2 py-1.5 sm:py-3 justify-between">
       {/* Top bar info */}
       <div className="flex items-center justify-between px-3 py-1.5 rounded-2xl bg-white/[0.04] backdrop-blur-md border border-white/10 text-xs font-bold text-white/70 shadow-xs">
         <span className="flex items-center gap-1.5">
@@ -179,13 +179,13 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
 
       {/* Semantic Clue Card with Category & First-letter help */}
       {currentHint && (
-        <div className="my-2">
+        <div className="my-1 sm:my-2">
           <HintCard
             hint={currentHint}
             allowNewWord={true}
             onNewWord={startNewGame}
             attemptsCount={guesses.length}
-            initialExpanded={true}
+            initialExpanded={false}
           />
         </div>
       )}

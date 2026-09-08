@@ -32,9 +32,23 @@ export function useClockSync() {
     return () => clearInterval(interval);
   }, [syncTime]);
 
+  const updateFromTimestamp = useCallback((serverTimestamp: number, rttMs = 0) => {
+    const tNow = Date.now();
+    const estimatedServerTime = serverTimestamp + rttMs / 2;
+    const offset = estimatedServerTime - tNow;
+
+    if (offsetRef.current === 0) {
+      offsetRef.current = Math.round(offset);
+    } else {
+      // Exponential moving average filter to smooth out network jitter
+      offsetRef.current = Math.round(offsetRef.current * 0.7 + offset * 0.3);
+    }
+    setServerOffsetMs(offsetRef.current);
+  }, []);
+
   const getServerNow = useCallback(() => {
     return Date.now() + offsetRef.current;
   }, []);
 
-  return { serverOffsetMs, getServerNow, syncTime };
+  return { serverOffsetMs, getServerNow, syncTime, updateFromTimestamp };
 }

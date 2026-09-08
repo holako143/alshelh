@@ -95,8 +95,32 @@ export const OpponentProgress: React.FC<OpponentProgressProps> = ({
           </div>
         </div>
 
-        {/* Mini preview of opponent guesses (tiles without letters) */}
-        <div className="flex flex-col gap-1 pt-1.5 border-t border-white/10">
+        {/* Mini preview of opponent guesses (compact on mobile, matrix on desktop) */}
+        <div className="flex sm:hidden items-center justify-center gap-1.5 pt-1.5 border-t border-white/10">
+          {Array.from({ length: maxAttempts }).map((_, rIdx) => {
+            const evalRow = opp.currentEvaluations[rIdx];
+            const isRowDone = Boolean(evalRow);
+            const hasCorrect = evalRow && evalRow.some((s) => s === 'CORRECT');
+            const hasPresent = evalRow && evalRow.some((s) => s === 'PRESENT');
+            return (
+              <div
+                key={rIdx}
+                title={`المحاولة ${rIdx + 1}`}
+                className={`flex-1 h-2 rounded-full transition-colors ${
+                  !isRowDone
+                    ? 'bg-white/10'
+                    : hasCorrect
+                    ? 'bg-emerald-400 shadow-xs shadow-emerald-400/50'
+                    : hasPresent
+                    ? 'bg-amber-400'
+                    : 'bg-white/30'
+                }`}
+              />
+            );
+          })}
+        </div>
+
+        <div className="hidden sm:flex flex-col gap-1 pt-1.5 border-t border-white/10">
           {Array.from({ length: maxAttempts }).map((_, rIdx) => {
             const evalRow = opp.currentEvaluations[rIdx];
             const isRowDone = Boolean(evalRow);

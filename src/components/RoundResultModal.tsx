@@ -9,6 +9,7 @@ interface RoundResultModalProps {
   roundNumber: number;
   totalRounds: number;
   transitionEndsAt: number | null;
+  getServerNow?: () => number;
   myPlayerId?: string;
   players?: Array<{ id: string; nickname: string }>;
   player1: { id: string; nickname: string };
@@ -21,6 +22,7 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
   roundNumber,
   totalRounds,
   transitionEndsAt,
+  getServerNow,
   myPlayerId,
   players,
   player1,
@@ -52,12 +54,13 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
     if (!transitionEndsAt) return;
 
     const interval = setInterval(() => {
-      const remaining = Math.max(0, Math.ceil((transitionEndsAt - Date.now()) / 1000));
+      const now = getServerNow ? getServerNow() : Date.now();
+      const remaining = Math.max(0, Math.ceil((transitionEndsAt - now) / 1000));
       setSecondsRemaining(remaining);
     }, 100);
 
     return () => clearInterval(interval);
-  }, [transitionEndsAt]);
+  }, [transitionEndsAt, getServerNow]);
 
   // Sort players for this round's ranking:
   // 1. Solved first

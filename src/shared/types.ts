@@ -128,7 +128,7 @@ export type WebSocketServerMessage =
   | { type: 'JOKER_ACTIVATED'; playerId: string; eliminatedLetters: string[]; jokersRemaining: number; serverTimestamp: number }
   | { type: 'OPPONENT_PROGRESS_UPDATE'; playerId: string; attemptsCount: number; hasSolved: boolean; hasExhausted: boolean; lastGuessPattern?: TileState[]; stateVersion: number }
   | { type: 'PLAYER_SOLVED_ROUND'; playerId: string; nickname: string; attemptsUsed: number; timeTakenMs: number; roundNumber: number; serverTimestamp: number }
-  | { type: 'ROUND_ENDED'; roundNumber: number; revealedWord: string; summary: RoundSummary; nextRoundInMs: number; stateVersion: number }
+  | { type: 'ROUND_ENDED'; roundNumber: number; revealedWord: string; summary: RoundSummary; nextRoundInMs: number; transitionEndsAt?: number; stateVersion: number; serverTimestamp?: number }
   | { type: 'MATCH_FINISHED'; winnerId: string | null; isDraw: boolean; finalState: RoomState; stateVersion: number }
   | { type: 'PLAYER_CONNECTION_CHANGED'; playerId: string; isConnected: boolean; gracePeriodEndsAt?: number; stateVersion: number }
   | { type: 'ERROR'; code: string; message: string; fatal?: boolean };
