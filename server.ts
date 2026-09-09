@@ -48,11 +48,11 @@ async function startServer() {
 
   // Create room endpoint
   app.post('/api/rooms/create', (req, res) => {
-    const { hostId, nickname, sessionToken, settings } = req.body;
+    const { hostId, nickname, sessionToken, settings, roomCode } = req.body;
     if (!hostId || !nickname || !sessionToken) {
       return res.status(400).json({ error: 'البيانات غير مكتملة' });
     }
-    const result = roomManager.createRoom(hostId, nickname, sessionToken, settings);
+    const result = roomManager.createRoom(hostId, nickname, sessionToken, settings, roomCode);
     res.json(result);
   });
 

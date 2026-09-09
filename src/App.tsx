@@ -165,23 +165,22 @@ export default function App() {
       // 2. Join in local engine with auto-ready = true!
       clientRoomEngine.joinRoom(roomCode, playerId, nickname, sessionToken);
 
-      // 3. Forward to serverless backend as well
-      try {
-        await safeFetchJson<{ success: boolean }>(`/api/rooms/${roomCode}/join`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            playerId,
-            nickname,
-            sessionToken,
-            fallbackSettings: inviteSettings,
-            fallbackHostName: hostName,
-          }),
-        });
-      } catch {}
-
+      // 3. Immediately transition to room with ZERO waiting delay!
       setActiveRoomCode(roomCode);
       setView('multiplayer');
+
+      // 4. Forward to serverless backend in background
+      safeFetchJson<{ success: boolean }>(`/api/rooms/${roomCode}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId,
+          nickname,
+          sessionToken,
+          fallbackSettings: inviteSettings,
+          fallbackHostName: hostName,
+        }),
+      }).catch(() => {});
     } catch (err: any) {
       setErrorMessage(err.message || 'فشل الانضمام للغرفة');
     } finally {

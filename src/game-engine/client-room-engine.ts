@@ -332,8 +332,16 @@ export class ClientRoomEngine {
     room.stateVersion++;
     room.updatedAt = Date.now();
 
-    this.saveRoomToStorage(room);
-    this.broadcastStateSync(room);
+    // Auto-start match quickly when players enter and are ready!
+    const connectedPlayers = Object.values(room.players).filter((p) => p.isConnected);
+    const allReady = connectedPlayers.length >= 2 && connectedPlayers.every((p) => p.isReady);
+
+    if (allReady && (room.status === 'READY_CHECK' || room.status === 'WAITING')) {
+      this.startCountdown(room);
+    } else {
+      this.saveRoomToStorage(room);
+      this.broadcastStateSync(room);
+    }
 
     return { success: true, state: this.sanitizeStateForPlayer(room, playerId) };
   }
@@ -427,12 +435,13 @@ export class ClientRoomEngine {
   public startMatch(roomCode: string, hostPlayerId: string): boolean {
     const room = this.rooms.get(roomCode.trim().toUpperCase());
     if (!room || room.hostPlayerId !== hostPlayerId) return false;
-    if (room.status !== 'WAITING' && room.status !== 'READY_CHECK') return false;
+    if (room.status !== 'WAITING' && room.status !== 'READY_CHECK' && room.status !== 'COUNTDOWN') return false;
 
     const connectedPlayers = Object.values(room.players).filter((p) => p.isConnected);
     if (connectedPlayers.length < 2) return false;
 
-    this.startCountdown(room);
+    // Direct immediate start! No delay!
+    this.startNextRound(room);
     return true;
   }
 
@@ -452,7 +461,7 @@ export class ClientRoomEngine {
 
   private startCountdown(room: RoomState) {
     room.status = 'COUNTDOWN';
-    const countdownDurationMs = 3000;
+    const countdownDurationMs = 1200;
     room.countdownEndsAt = Date.now() + countdownDurationMs;
     room.stateVersion++;
     room.updatedAt = Date.now();

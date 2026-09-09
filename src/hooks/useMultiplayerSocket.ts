@@ -103,8 +103,9 @@ export function useMultiplayerSocket(
       socketRef.current = null;
     }
 
-    const isClientRoom = clientRoomEngine.getRoomState(roomCode) !== null;
-    const useClient = isClientModeRef.current || isClientRoom;
+    // Use server WebSocket unless repeatedly failed (>= 5 attempts) or explicitly serverless-only host
+    const isExplicitServerlessOnly = typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app');
+    const useClient = isClientModeRef.current || isExplicitServerlessOnly;
 
     let ws: WebSocket | ClientSocketAdapter;
     if (useClient) {
@@ -122,6 +123,7 @@ export function useMultiplayerSocket(
       setIsReconnecting(false);
       setLastError(null);
       reconnectAttemptsRef.current = 0;
+      isClientModeRef.current = false;
       lastPongReceivedRef.current = Date.now();
 
       const { playerId, sessionToken, nickname } = getSessionCredentials();
@@ -422,9 +424,9 @@ export function useMultiplayerSocket(
       if (watchdogIntervalRef.current) clearInterval(watchdogIntervalRef.current);
       setIsConnected(false);
 
-      // If WebSocket closed without ever succeeding on serverless host, switch smoothly to client mode
-      if (!isClientModeRef.current && reconnectAttemptsRef.current >= 1) {
-        console.info('Switching to in-browser Serverless multiplayer engine...');
+      // Only switch to in-browser client fallback after 5 consecutive failed connection attempts
+      if (!isClientModeRef.current && reconnectAttemptsRef.current >= 5) {
+        console.info('WebSocket server unavailable after 5 attempts, switching to client-side fallback...');
         isClientModeRef.current = true;
         reconnectAttemptsRef.current = 0;
         connect();
@@ -446,11 +448,6 @@ export function useMultiplayerSocket(
 
     ws.onerror = () => {
       setIsConnected(false);
-      if (!isClientModeRef.current) {
-        console.info('WebSocket connection failed, switching to in-browser Serverless multiplayer engine...');
-        isClientModeRef.current = true;
-        reconnectAttemptsRef.current = 0;
-      }
     };
   }, [roomCode, getSessionCredentials, send]);
 

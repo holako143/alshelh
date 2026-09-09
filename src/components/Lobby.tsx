@@ -380,8 +380,9 @@ export const Lobby: React.FC<LobbyProps> = ({
                 className="w-full text-center tracking-widest text-2xl font-mono font-black py-3 px-4 rounded-xl sm:rounded-2xl border border-white/20 bg-white/[0.05] text-emerald-400 placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 uppercase backdrop-blur-md"
               />
             </div>
-            <p className="text-[11px] text-white/50 text-center">
-              يمكنك كتابة الرمز المكون من 5 أحرف أو لصق رابط الدعوة بالكامل
+            <p className="text-[11px] text-white/60 text-center flex items-center justify-center gap-1">
+              <span className="text-emerald-400">⚡</span>
+              <span>عند إدخال الرمز تصبح حالتك «جاهز» تلقائياً وتبدأ المباراة فور اكتمال اللاعبين</span>
             </p>
           </div>
 
@@ -389,9 +390,16 @@ export const Lobby: React.FC<LobbyProps> = ({
             id="btn-submit-join-room"
             type="submit"
             disabled={isLoading || sanitizeRoomCode(roomCodeInput).length !== 5 || !nickname.trim()}
-            className="w-full py-3.5 sm:py-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-white font-black text-sm shadow-xl shadow-emerald-500/25 border border-white/20 transition-all active:scale-98 disabled:opacity-40 cursor-pointer mt-1"
+            className="w-full py-3.5 sm:py-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-white font-black text-sm shadow-xl shadow-emerald-500/30 border border-white/20 transition-all active:scale-98 disabled:opacity-40 cursor-pointer mt-1 flex items-center justify-center gap-2"
           >
-            {isLoading ? 'جارٍ الانضمام...' : 'الانضمام للغرفة الآن'}
+            {isLoading ? (
+              <span>جارٍ الانضمام والتحضير...</span>
+            ) : (
+              <>
+                <Users className="w-4 h-4" />
+                <span>انضمام فوري للمباراة ⚡</span>
+              </>
+            )}
           </button>
         </form>
       )}

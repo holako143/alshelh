@@ -64,19 +64,52 @@ export class RoomManager {
     hostId: string,
     nickname: string,
     sessionToken: string,
-    customSettings?: Partial<GameSettings>
+    customSettings?: Partial<GameSettings>,
+    fixedRoomCode?: string
   ): { roomCode: string; state: RoomState } {
-    const roomCode = this.generateRoomCode();
+    let roomCode = fixedRoomCode ? fixedRoomCode.trim().toUpperCase() : this.generateRoomCode();
     const settings: GameSettings = {
       ...DEFAULT_GAME_SETTINGS,
       ...customSettings,
     };
 
+    // If room already exists in WAITING state, cleanly attach host
+    if (this.rooms.has(roomCode)) {
+      const existing = this.rooms.get(roomCode)!;
+      if (existing.status === 'WAITING' || existing.status === 'READY_CHECK') {
+        existing.hostPlayerId = hostId;
+        existing.settings = { ...existing.settings, ...settings };
+        existing.players[hostId] = {
+          id: hostId,
+          nickname: nickname.trim() || 'المستضيف',
+          role: 'host',
+          isReady: true, // Auto ready!
+          isConnected: true,
+          connectedAt: Date.now(),
+          disconnectedAt: null,
+          totalScore: 0,
+          roundsWon: 0,
+          wordsSolved: 0,
+          totalAttempts: 0,
+          totalTimeMs: 0,
+          currentGuesses: [],
+          currentEvaluations: [],
+          hasSolved: false,
+          hasExhausted: false,
+          finishedAt: null,
+          jokersRemaining: settings.jokerCount !== undefined ? settings.jokerCount : 1,
+        };
+        existing.updatedAt = Date.now();
+        existing.stateVersion++;
+        return { roomCode, state: this.sanitizeStateForPlayer(existing, hostId) };
+      }
+    }
+
     const hostPlayer: PlayerState = {
       id: hostId,
       nickname: nickname.trim() || 'المستضيف',
       role: 'host',
-      isReady: false,
+      isReady: true, // Auto ready upon creation!
       isConnected: true,
       connectedAt: Date.now(),
       disconnectedAt: null,
@@ -90,7 +123,7 @@ export class RoomManager {
       hasSolved: false,
       hasExhausted: false,
       finishedAt: null,
-      jokersRemaining: 1,
+      jokersRemaining: settings.jokerCount !== undefined ? settings.jokerCount : 1,
     };
 
     const roomState: RoomState = {
@@ -131,22 +164,38 @@ export class RoomManager {
     sessionToken: string
   ): { success: boolean; state?: RoomState; error?: string } {
     const normalizedRoomCode = roomCode.trim().toUpperCase();
-    const room = this.rooms.get(normalizedRoomCode);
+    let room = this.rooms.get(normalizedRoomCode);
     if (!room) {
-      return { success: false, error: 'رمز الغرفة غير موجود' };
+      // Auto-heal: If joining a valid 5-character code, initialize room so players are never blocked
+      if (normalizedRoomCode.length === 5) {
+        this.createRoom('host_' + normalizedRoomCode, 'المستضيف', 'tok_host_' + normalizedRoomCode, undefined, normalizedRoomCode);
+        room = this.rooms.get(normalizedRoomCode);
+      }
+      if (!room) {
+        return { success: false, error: 'رمز الغرفة غير موجود' };
+      }
     }
 
     // Check if player is already in this room (reconnection or socket re-join)
     if (room.players[playerId]) {
       room.players[playerId].isConnected = true;
+      room.players[playerId].isReady = true; // Auto-ready
       room.players[playerId].disconnectedAt = null;
       if (nickname && nickname.trim()) {
         room.players[playerId].nickname = nickname.trim();
       }
       room.stateVersion++;
       room.updatedAt = Date.now();
-      // Synchronize immediately to all room players
-      this.broadcastStateSync(room);
+
+      // Check if all ready upon reconnect
+      const connectedPlayers = Object.values(room.players).filter((p) => p.isConnected);
+      const allReady = connectedPlayers.length >= 2 && connectedPlayers.every((p) => p.isReady);
+      if (allReady && (room.status === 'READY_CHECK' || room.status === 'WAITING')) {
+        this.startCountdown(room);
+      } else {
+        this.broadcastStateSync(room);
+      }
+
       return { success: true, state: this.sanitizeStateForPlayer(room, playerId) };
     }
 
@@ -165,7 +214,7 @@ export class RoomManager {
       id: playerId,
       nickname: nickname.trim() || `اللاعب ${existingPlayerCount + 1}`,
       role: 'guest',
-      isReady: false,
+      isReady: true, // Auto ready upon entering code and joining!
       isConnected: true,
       connectedAt: Date.now(),
       disconnectedAt: null,
@@ -179,7 +228,7 @@ export class RoomManager {
       hasSolved: false,
       hasExhausted: false,
       finishedAt: null,
-      jokersRemaining: 1,
+      jokersRemaining: room.settings.jokerCount !== undefined ? room.settings.jokerCount : 1,
     };
 
     if (!room.guestPlayerId) {
@@ -192,8 +241,15 @@ export class RoomManager {
     room.stateVersion++;
     room.updatedAt = Date.now();
 
-    // Broadcast synchronized state to all players in the room
-    this.broadcastStateSync(room);
+    // Auto-start match quickly when players enter and are ready!
+    const connectedPlayers = Object.values(room.players).filter((p) => p.isConnected);
+    const allReady = connectedPlayers.length >= 2 && connectedPlayers.every((p) => p.isReady);
+
+    if (allReady && (room.status === 'READY_CHECK' || room.status === 'WAITING')) {
+      this.startCountdown(room);
+    } else {
+      this.broadcastStateSync(room);
+    }
 
     return { success: true, state: this.sanitizeStateForPlayer(room, playerId) };
   }
@@ -234,7 +290,8 @@ export class RoomManager {
     const connectedPlayers = Object.values(room.players).filter((p) => p.isConnected);
     if (connectedPlayers.length < 2) return false;
 
-    this.startCountdown(room);
+    // Immediately start round with zero delay when host starts match!
+    this.startNextRound(room);
     return true;
   }
 
@@ -265,11 +322,11 @@ export class RoomManager {
   }
 
   /**
-   * Starts a 3-second countdown before round 1 or match start
+   * Starts a fast 1.2-second countdown before round 1 or match start
    */
   private startCountdown(room: RoomState) {
     room.status = 'COUNTDOWN';
-    const countdownDurationMs = 3000;
+    const countdownDurationMs = 1200;
     room.countdownEndsAt = Date.now() + countdownDurationMs;
     room.stateVersion++;
     room.updatedAt = Date.now();

@@ -174,6 +174,12 @@ export class ServerlessRoomManager {
     room.stateVersion++;
     room.updatedAt = now;
 
+    const connectedPlayers = Object.values(room.players).filter((p) => p.isConnected);
+    const allReady = connectedPlayers.length >= 2 && connectedPlayers.every((p) => p.isReady);
+    if (allReady) {
+      this.startNextRound(room);
+    }
+
     return {
       success: true,
       state: this.sanitizeStateForPlayer(room, playerId),
