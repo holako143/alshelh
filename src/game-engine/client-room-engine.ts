@@ -223,7 +223,7 @@ export class ClientRoomEngine {
         hasSolved: false,
         hasExhausted: false,
         finishedAt: null,
-        jokersRemaining: 1,
+        jokersRemaining: settings.jokerCount !== undefined ? settings.jokerCount : 1,
       };
       room = {
         roomCode: normalized,
@@ -319,7 +319,7 @@ export class ClientRoomEngine {
       hasSolved: false,
       hasExhausted: false,
       finishedAt: null,
-      jokersRemaining: 1,
+      jokersRemaining: room.settings.jokerCount !== undefined ? room.settings.jokerCount : 1,
     };
 
     if (!room.guestPlayerId) {
@@ -484,6 +484,7 @@ export class ClientRoomEngine {
       p.hasSolved = false;
       p.hasExhausted = false;
       p.finishedAt = null;
+      p.jokersRemaining = room.settings.jokerCount !== undefined ? room.settings.jokerCount : 1;
     }
 
     const customDurations = room.settings.customRoundDurations;
@@ -597,7 +598,7 @@ export class ClientRoomEngine {
       return { success: false, error: 'تم استنفاد الحد الأقصى للمحاولات' };
     }
 
-    const validation = validateGuessWord(guess, true);
+    const validation = validateGuessWord(guess, false);
     if (!validation.isValid) {
       return { success: false, error: validation.errorMessage || 'الكلمة غير صالحة' };
     }
@@ -704,7 +705,8 @@ export class ClientRoomEngine {
     );
 
     const shuffled = candidateLetters.sort(() => Math.random() - 0.5);
-    const eliminatedLetters = shuffled.slice(0, 3);
+    const eliminateCount = room.settings.jokerEliminateCount ?? 3;
+    const eliminatedLetters = shuffled.slice(0, eliminateCount);
 
     player.jokersRemaining = Math.max(0, (player.jokersRemaining ?? 1) - 1);
     room.stateVersion++;

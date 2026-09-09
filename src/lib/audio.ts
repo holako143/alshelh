@@ -438,6 +438,34 @@ class SoundSynthesizer {
       });
     } catch {}
   }
+
+  /**
+   * Sound effect when opening dictionary hint modal
+   */
+  public playHintReveal() {
+    const dest = this.getDestination();
+    if (!dest || !this.ctx) return;
+
+    try {
+      const notes = [440, 554.37, 659.25]; // A4, C#5, E5 (warm major chord)
+      notes.forEach((freq, idx) => {
+        const osc = this.ctx!.createOscillator();
+        const gain = this.ctx!.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, this.ctx!.currentTime + idx * 0.05);
+
+        gain.gain.setValueAtTime(0.1, this.ctx!.currentTime + idx * 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx!.currentTime + idx * 0.05 + 0.22);
+
+        osc.connect(gain);
+        gain.connect(dest);
+
+        osc.start(this.ctx!.currentTime + idx * 0.05);
+        osc.stop(this.ctx!.currentTime + idx * 0.05 + 0.22);
+      });
+    } catch {}
+  }
 }
 
 export const soundManager = new SoundSynthesizer();

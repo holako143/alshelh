@@ -64,7 +64,7 @@ export class ServerlessRoomManager {
       hasSolved: false,
       hasExhausted: false,
       finishedAt: null,
-      jokersRemaining: 1,
+      jokersRemaining: settings.jokerCount !== undefined ? settings.jokerCount : 1,
     };
 
     const room: RoomState = {
@@ -163,7 +163,7 @@ export class ServerlessRoomManager {
       hasSolved: false,
       hasExhausted: false,
       finishedAt: null,
-      jokersRemaining: 1,
+      jokersRemaining: room.settings.jokerCount !== undefined ? room.settings.jokerCount : 1,
     };
 
     room.players[playerId] = newPlayer;
@@ -228,7 +228,7 @@ export class ServerlessRoomManager {
       p.hasSolved = false;
       p.hasExhausted = false;
       p.finishedAt = null;
-      p.jokersRemaining = 1;
+      p.jokersRemaining = room.settings.jokerCount !== undefined ? room.settings.jokerCount : 1;
     });
 
     room.stateVersion++;
@@ -267,14 +267,14 @@ export class ServerlessRoomManager {
       return { success: false, error: 'استنفدت جميع المحاولات' };
     }
 
-    const validation = validateGuessWord(guess, true);
+    const validation = validateGuessWord(guess, false);
     if (!validation.isValid) {
       return { success: false, error: validation.errorMessage || 'كلمة غير مقبولة' };
     }
 
     const normalizedGuess = validation.normalizedWord;
     const secretWord = room.currentSecretWord || '';
-    const evaluation = evaluateGuess(normalizedGuess, secretWord);
+    const evaluation = evaluateGuess(secretWord, normalizedGuess);
     const solved = isWordSolved(evaluation);
 
     player.currentGuesses.push(normalizedGuess);

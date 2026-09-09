@@ -14,9 +14,9 @@ export interface ValidationResult {
  * 1. Checks length matches GAME_CONFIG.wordLength (5)
  * 2. Checks characters are valid Arabic letters
  * 3. Normalizes diacritics / alefs
- * 4. Checks against authentic Arabic dictionary
+ * 4. Supports any 5-letter Arabic word to allow user experimentation with letter colors
  */
-export function validateGuessWord(word: string, requireDictionary: boolean = true): ValidationResult {
+export function validateGuessWord(word: string, requireDictionary: boolean = false): ValidationResult {
   if (!word) {
     return { isValid: false, normalizedWord: '', errorMessage: 'الرجاء إدخال الكلمة' };
   }
@@ -39,8 +39,8 @@ export function validateGuessWord(word: string, requireDictionary: boolean = tru
     };
   }
 
+  // If strict dictionary verification is explicitly requested, check vocabulary
   if (requireDictionary && !isValidArabicWord(normalized)) {
-    // Check if the original word or normalized is in the dictionary
     const inDict = isValidArabicWord(word) || isValidArabicWord(normalized);
     if (!inDict) {
       return {

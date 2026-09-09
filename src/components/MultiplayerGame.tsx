@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RoomState, PlayerState, TileState } from '../shared/types';
+import { RoomState, PlayerState, TileState, GameSettings } from '../shared/types';
 import { GameHeader } from './GameHeader';
 import { GameBoard } from './GameBoard';
 import { OpponentProgress } from './OpponentProgress';
@@ -42,6 +42,7 @@ interface MultiplayerGameProps {
   isReconnecting?: boolean;
   onAddBot?: () => void;
   onRemoveBot?: () => void;
+  onUpdateSettings?: (settings: Partial<GameSettings>) => void;
 }
 
 export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
@@ -72,11 +73,13 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
   isReconnecting,
   onAddBot,
   onRemoveBot,
+  onUpdateSettings,
 }) => {
   const [currentGuess, setCurrentGuess] = useState<string>('');
   const [isShaking, setIsShaking] = useState<boolean>(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [letterStatuses, setLetterStatuses] = useState<Record<string, TileState>>({});
+  const [isHintModalOpen, setIsHintModalOpen] = useState<boolean>(false);
 
   // Unified Server Timestamp Synchronization
   const [serverTime, setServerTime] = useState<number>(() => getServerNow());
@@ -253,6 +256,7 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
             getServerNow={getServerNow}
             onAddBot={onAddBot}
             onRemoveBot={onRemoveBot}
+            onUpdateSettings={onUpdateSettings}
           />
         </main>
       </div>
@@ -382,13 +386,15 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
           </div>
         </div>
 
-        {/* Semantic Hint Card for Easy Guessing & Fun Participation */}
+        {/* Semantic Hint Card for Easy Guessing & Competitive Participation */}
         {roomState.status === 'PLAYING' && roomState.currentHint && (
           <div className="px-1 sm:px-2 my-1">
             <HintCard
               hint={roomState.currentHint}
               attemptsCount={myPlayerState?.currentGuesses.length || 0}
               initialExpanded={false}
+              isOpenControlled={isHintModalOpen}
+              onToggleControlled={setIsHintModalOpen}
             />
           </div>
         )}
@@ -406,8 +412,8 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
           />
         </div>
 
-        {/* On-screen Arabic Keyboard */}
-        <div className="pt-2 pb-1">
+        {/* On-screen Arabic Keyboard with comfortable bottom elevation */}
+        <div className="pt-2 pb-4 sm:pb-6 md:pb-8">
           <ArabicKeyboard
             onChar={handleChar}
             onDelete={handleDelete}
@@ -415,7 +421,9 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
             letterStatuses={letterStatuses}
             disabled={isInputDisabled}
             onUseJoker={onUseJoker}
-            jokersRemaining={myPlayerState?.jokersRemaining ?? 0}
+            jokersRemaining={myPlayerState?.jokersRemaining ?? roomState.settings.jokerCount ?? 1}
+            jokerEliminateCount={roomState.settings.jokerEliminateCount ?? 3}
+            onOpenHint={roomState.currentHint ? () => setIsHintModalOpen(true) : undefined}
           />
         </div>
       </main>

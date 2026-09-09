@@ -2,7 +2,7 @@ import React, { useEffect, useCallback } from 'react';
 import { ARABIC_KEYBOARD_LAYOUT, ARABIC_LETTERS_SET } from '../shared/constants';
 import { TileState } from '../shared/types';
 import { soundManager } from '../lib/audio';
-import { Delete, CornerDownLeft, Wand2 } from 'lucide-react';
+import { Delete, CornerDownLeft, Wand2, BookOpen } from 'lucide-react';
 
 interface ArabicKeyboardProps {
   onChar: (char: string) => void;
@@ -13,7 +13,9 @@ interface ArabicKeyboardProps {
   onUseJoker?: () => void;
   jokersAvailable?: number;
   jokersRemaining?: number;
+  jokerEliminateCount?: number;
   jokerDisabled?: boolean;
+  onOpenHint?: () => void;
 }
 
 export const ArabicKeyboard: React.FC<ArabicKeyboardProps> = ({
@@ -25,7 +27,9 @@ export const ArabicKeyboard: React.FC<ArabicKeyboardProps> = ({
   onUseJoker,
   jokersAvailable = 0,
   jokersRemaining,
+  jokerEliminateCount = 3,
   jokerDisabled = false,
+  onOpenHint,
 }) => {
   const actualJokers = jokersRemaining !== undefined ? jokersRemaining : jokersAvailable;
   // Physical keyboard listener
@@ -70,23 +74,40 @@ export const ArabicKeyboard: React.FC<ArabicKeyboardProps> = ({
   };
 
   return (
-    <div id="arabic-keyboard" className="w-full max-w-2xl mx-auto px-1 select-none touch-manipulation">
-      {/* Optional Joker power-up toolbar */}
-      {onUseJoker && (
-        <div className="flex items-center justify-between pb-1.5 px-2">
-          <button
-            id="btn-use-joker-powerup"
-            type="button"
-            disabled={disabled || jokerDisabled || actualJokers <= 0}
-            onClick={onUseJoker}
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-purple-500/80 via-pink-500/80 to-purple-600/80 text-white border border-purple-300/40 shadow-md shadow-purple-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-            title="حذف 3 أحرف خاطئة من اللوحة للمساعدة"
-          >
-            <Wand2 className="w-3.5 h-3.5 text-yellow-300 animate-pulse" />
-            <span>الجوكر 🃏 ({actualJokers} متبقي)</span>
-            <span className="text-[10px] bg-white/20 px-1.5 py-0.2 rounded-md">حذف 3 أحرف</span>
-          </button>
-          <span className="text-[10px] text-white/50">لوحة المفاتيح التفاعلية</span>
+    <div id="arabic-keyboard" className="w-full max-w-2xl mx-auto px-1 pb-4 sm:pb-6 md:pb-8 mb-2 sm:mb-3 select-none touch-manipulation">
+      {/* Power-up and Competitive Hint Toolbar */}
+      {(onUseJoker || onOpenHint) && (
+        <div className="flex items-center justify-between pb-1.5 px-2 gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {onOpenHint && (
+              <button
+                id="btn-keyboard-dictionary-hint"
+                type="button"
+                onClick={onOpenHint}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-amber-500/90 via-orange-500/90 to-amber-600/90 text-white border border-amber-300/40 shadow-md shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                title="إظهار معنى الكلمة من القاموس العربي"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-amber-200" />
+                <span>تلميح القاموس 📖</span>
+              </button>
+            )}
+
+            {onUseJoker && (
+              <button
+                id="btn-use-joker-powerup"
+                type="button"
+                disabled={disabled || jokerDisabled || actualJokers <= 0}
+                onClick={onUseJoker}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-purple-500/80 via-pink-500/80 to-purple-600/80 text-white border border-purple-300/40 shadow-md shadow-purple-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                title={`حذف ${jokerEliminateCount} أحرف خاطئة من اللوحة للمساعدة`}
+              >
+                <Wand2 className="w-3.5 h-3.5 text-yellow-300 animate-pulse" />
+                <span>الجوكر 🃏 ({actualJokers} متبقي)</span>
+                <span className="text-[10px] bg-white/20 px-1.5 py-0.2 rounded-md">حذف {jokerEliminateCount}</span>
+              </button>
+            )}
+          </div>
+          <span className="text-[10px] text-white/50 hidden xs:inline">مساعدات تنافسية</span>
         </div>
       )}
 

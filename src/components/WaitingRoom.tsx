@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { RoomState, PlayerState } from '../shared/types';
+import { RoomState, PlayerState, GameSettings } from '../shared/types';
 import { GAME_CONFIG } from '../shared/constants';
-import { Copy, Check, Crown, User, CheckCircle2, CircleDashed, Users, Sparkles, LogOut, Play, Share2, Bot, UserMinus } from 'lucide-react';
+import { THEME_DEFINITIONS } from '../game-engine/words-data';
+import { Copy, Check, Crown, User, CheckCircle2, CircleDashed, Users, Sparkles, LogOut, Play, Share2, Bot, UserMinus, Settings2, Wand2, Layers, ChevronDown, ChevronUp } from 'lucide-react';
 import { soundManager } from '../lib/audio';
 
 interface WaitingRoomProps {
@@ -14,6 +15,7 @@ interface WaitingRoomProps {
   getServerNow?: () => number;
   onAddBot?: () => void;
   onRemoveBot?: () => void;
+  onUpdateSettings?: (settings: Partial<GameSettings>) => void;
 }
 
 export const WaitingRoom: React.FC<WaitingRoomProps> = ({
@@ -26,10 +28,12 @@ export const WaitingRoom: React.FC<WaitingRoomProps> = ({
   getServerNow,
   onAddBot,
   onRemoveBot,
+  onUpdateSettings,
 }) => {
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [countdownSecs, setCountdownSecs] = useState<number>(3);
+  const [showSettingsEditor, setShowSettingsEditor] = useState(false);
 
   useEffect(() => {
     if (roomState.status !== 'COUNTDOWN' || !countdownEndsAt) return;
@@ -143,6 +147,155 @@ export const WaitingRoom: React.FC<WaitingRoomProps> = ({
             <span>{copiedLink ? 'تم نسخ الرابط!' : 'مشاركة الرابط 🔗'}</span>
           </button>
         </div>
+      </div>
+
+      {/* Match Settings Overview & Host Editor */}
+      <div className="bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-3.5 sm:p-4 text-right flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Settings2 className="w-4 h-4 text-emerald-400" />
+            <span className="font-extrabold text-sm text-white">إعدادات وقواعد المباراة</span>
+          </div>
+          {isHost && onUpdateSettings && (
+            <button
+              id="btn-toggle-host-settings"
+              type="button"
+              onClick={() => setShowSettingsEditor(!showSettingsEditor)}
+              className="text-xs font-bold px-2.5 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/30 transition-all flex items-center gap-1 cursor-pointer"
+            >
+              <span>{showSettingsEditor ? 'إخفاء التعديل' : 'تعديل الإعدادات (للمستضيف)'}</span>
+              {showSettingsEditor ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          )}
+        </div>
+
+        {/* Badges overview */}
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.06] border border-white/10 text-white/80 font-bold">
+            <span>{THEME_DEFINITIONS.find((t) => t.id === roomState.settings.themeCategory)?.icon || '🌟'}</span>
+            <span>المجال: {THEME_DEFINITIONS.find((t) => t.id === roomState.settings.themeCategory)?.name || 'جميع المجالات'}</span>
+          </span>
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.06] border border-white/10 text-white/80 font-bold">
+            <Wand2 className="w-3.5 h-3.5 text-purple-300" />
+            <span>الجوكر: {roomState.settings.jokerCount ?? 1} (حذف {roomState.settings.jokerEliminateCount ?? 3} أحرف)</span>
+          </span>
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.06] border border-white/10 text-white/80 font-bold">
+            <span>🎯</span>
+            <span>المحاولات: {roomState.settings.maxAttempts}</span>
+          </span>
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.06] border border-white/10 text-white/80 font-bold">
+            <span>⏱️</span>
+            <span>الوقت: {roomState.settings.guessTimeLimitSecs} ثانية</span>
+          </span>
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.06] border border-white/10 text-white/80 font-bold">
+            <span>🔄</span>
+            <span>الجولات: {roomState.settings.totalRounds}</span>
+          </span>
+        </div>
+
+        {/* Host Live Settings Editor */}
+        {isHost && onUpdateSettings && showSettingsEditor && (
+          <div className="pt-3 border-t border-white/10 flex flex-col gap-3.5 animate-in fade-in-50 text-right">
+            {/* Joker Cards Count */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-white/80 flex items-center gap-1">
+                <Wand2 className="w-3.5 h-3.5 text-purple-400" />
+                <span>عدد كروت الجوكر المتاحة لكل لاعب: ({roomState.settings.jokerCount ?? 1})</span>
+              </label>
+              <div className="flex gap-1.5">
+                {[0, 1, 2, 3].map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    onClick={() => onUpdateSettings({ jokerCount: count })}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                      (roomState.settings.jokerCount ?? 1) === count
+                        ? 'bg-purple-600 text-white border-purple-300 shadow-sm'
+                        : 'bg-white/[0.05] text-white/70 border-white/10 hover:bg-white/[0.1]'
+                    }`}
+                  >
+                    {count === 0 ? 'بدون جوكر' : `${count} جوكر 🃏`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Letters to Eliminate per Joker */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-white/80 flex items-center gap-1">
+                <span>🪄</span>
+                <span>قوة مساعدة الجوكر (عدد الأحرف الخاطئة التي تحذف من اللوحة): ({roomState.settings.jokerEliminateCount ?? 3} أحرف)</span>
+              </label>
+              <div className="flex gap-1.5">
+                {[2, 3, 4, 5].map((cnt) => (
+                  <button
+                    key={cnt}
+                    type="button"
+                    onClick={() => onUpdateSettings({ jokerEliminateCount: cnt })}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                      (roomState.settings.jokerEliminateCount ?? 3) === cnt
+                        ? 'bg-purple-600 text-white border-purple-300 shadow-sm'
+                        : 'bg-white/[0.05] text-white/70 border-white/10 hover:bg-white/[0.1]'
+                    }`}
+                  >
+                    حذف {cnt} أحرف
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Attempts Count */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-white/80">
+                عدد المحاولات لكل لاعب: ({roomState.settings.maxAttempts})
+              </label>
+              <div className="flex gap-1.5">
+                {[6, 8, 10].map((att) => (
+                  <button
+                    key={att}
+                    type="button"
+                    onClick={() => onUpdateSettings({ maxAttempts: att })}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                      roomState.settings.maxAttempts === att
+                        ? 'bg-emerald-600 text-white border-emerald-300 shadow-sm'
+                        : 'bg-white/[0.05] text-white/70 border-white/10 hover:bg-white/[0.1]'
+                    }`}
+                  >
+                    {att} محاولات
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Theme Category */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-white/80 flex items-center gap-1">
+                <Layers className="w-3.5 h-3.5 text-teal-400" />
+                <span>مجال وموضوع الكلمات:</span>
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                {THEME_DEFINITIONS.map((theme) => {
+                  const isSelected = (roomState.settings.themeCategory || 'ALL') === theme.id;
+                  return (
+                    <button
+                      key={theme.id}
+                      type="button"
+                      onClick={() => onUpdateSettings({ themeCategory: theme.id })}
+                      className={`p-2 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer text-right ${
+                        isSelected
+                          ? 'bg-teal-500/30 text-teal-300 border-teal-400/50 shadow-sm'
+                          : 'bg-white/[0.04] text-white/70 border-white/10 hover:bg-white/[0.08]'
+                      }`}
+                    >
+                      <span className="text-sm">{theme.icon}</span>
+                      <span className="truncate">{theme.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Players Multi-Player Grid (up to 10 slots) */}

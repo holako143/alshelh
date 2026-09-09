@@ -4,12 +4,14 @@
  */
 
 import { WordHint } from '../shared/types';
+import { ARABIC_5_LETTER_WORDS } from './arabic-vocabulary-dataset';
 
 export interface WordClueItem {
   word: string;
   category: string;
   hint: string;
   icon: string;
+  themeId?: string;
 }
 
 export const CURATED_WORDS_WITH_HINTS: WordClueItem[] = [
@@ -609,12 +611,348 @@ export const CURATED_WORDS_WITH_HINTS: WordClueItem[] = [
     category: 'رياضة وشجاعة',
     hint: 'المتفوقون والفائزون الذين يحققون الإنجازات والانتصارات الباهرة',
     icon: '🥇',
+    themeId: 'SPORTS',
+  },
+  // إسلاميات وقرآن وتراث
+  {
+    word: 'محراب',
+    category: 'إسلاميات ومساجد',
+    hint: 'الموضع المجوف في صدر المسجد يشير نحو القبلة ويقف فيه الإمام للصلاة',
+    icon: '🕌',
+    themeId: 'ISLAMIC',
+  },
+  {
+    word: 'مئذنة',
+    category: 'إسلاميات وتراث',
+    hint: 'برج مرتفع في المسجد يُرفع من أعلاه نداء الصلاة الشجي خمس مرات يومياً',
+    icon: '🕌',
+    themeId: 'ISLAMIC',
+  },
+  {
+    word: 'سجادة',
+    category: 'إسلاميات وعبادة',
+    hint: 'بساط طاهر ونظيف يبسطه المسلم لأداء الصلاة والوقوف خاشعاً بين يدي الله',
+    icon: '✨',
+    themeId: 'ISLAMIC',
+  },
+  {
+    word: 'تسبيح',
+    category: 'إسلاميات وأذكار',
+    hint: 'ذكر جليل وتنزيه لله عز وجل عن كل نقص بقول "سبحان الله"',
+    icon: '📿',
+    themeId: 'ISLAMIC',
+  },
+  {
+    word: 'تهجد',
+    category: 'إسلاميات وعبادة',
+    hint: 'صلاة تطوع وقيام ليل تقام في سكون الظلام تقرباً إلى الله تعالى',
+    icon: '🌙',
+    themeId: 'ISLAMIC',
+  },
+  {
+    word: 'إحسان',
+    category: 'إسلاميات وقيم',
+    hint: 'أعلى مراتب الدين: أن تعبد الله كأنك تراه، فإن لم تكن تراه فإنه يراك',
+    icon: '💖',
+    themeId: 'ISLAMIC',
+  },
+  {
+    word: 'طواف',
+    category: 'إسلاميات ومناسك',
+    hint: 'الدوران التعبدي المبارك حول الكعبة المشرفة سبعة أشواط في الحج والعمرة',
+    icon: '🕋',
+    themeId: 'ISLAMIC',
+  },
+  {
+    word: 'عرفات',
+    category: 'إسلاميات ومناسك',
+    hint: 'جبل وصعيد طاهر يقف عليه الحجاج في اليوم التاسع من ذي الحجة (الحج عرفة)',
+    icon: '🏔️',
+    themeId: 'ISLAMIC',
+  },
+  {
+    word: 'زمزم',
+    category: 'إسلاميات ومياه',
+    hint: 'عين ماء طاهرة مباركة نبعت في جوار الكعبة المكرمة لما شرب له',
+    icon: '💧',
+    themeId: 'ISLAMIC',
+  },
+  {
+    word: 'تلاوة',
+    category: 'إسلاميات وقرآن',
+    hint: 'قراءة آيات كتاب الله الحكيم وتدبر معانيه العظيمة وأحكامه',
+    icon: '📖',
+    themeId: 'ISLAMIC',
+  },
+  {
+    word: 'إخلاص',
+    category: 'إسلاميات وقيم',
+    hint: 'صدق النية وتجريد القصد والعمل لوجه الله تعالى دون رياء',
+    icon: '🤍',
+    themeId: 'ISLAMIC',
+  },
+  // أطعمة ومأكولات وثمار
+  {
+    word: 'برتقال',
+    category: 'أطعمة وثمار',
+    hint: 'فاكهة حمضية شتوية شهية غنية بفيتامين سي تمنح النشاط والانتعاش',
+    icon: '🍊',
+    themeId: 'FOOD',
+  },
+  {
+    word: 'تفاح',
+    category: 'أطعمة وفواكه',
+    hint: 'ثمرة محبوبة ومتنوعة الألوان ذات قشرة لامعة وقيمة غذائية عالية',
+    icon: '🍎',
+    themeId: 'FOOD',
+  },
+  {
+    word: 'ليمون',
+    category: 'أطعمة وتوابل',
+    hint: 'ثمرة حمضية صفراء ذات نكهة لاذعة منعشة تضاف للمشروبات والسلطات',
+    icon: '🍋',
+    themeId: 'FOOD',
+  },
+  {
+    word: 'زيتون',
+    category: 'أطعمة وثمار',
+    hint: 'شجرة وثمار مباركة يُعصر منها أزكى الزيوت الصحية ذات الفوائد الجمة',
+    icon: '🫒',
+    themeId: 'FOOD',
+  },
+  {
+    word: 'تمور',
+    category: 'أطعمة وثمار',
+    hint: 'ثمار حلوة مباركة تجود بها النخيل وتعد رمز الكرم والضيافة العربية',
+    icon: '🌴',
+    themeId: 'FOOD',
+  },
+  {
+    word: 'مشمش',
+    category: 'أطعمة وفواكه',
+    hint: 'فاكهة صيفية ناعمة الملمس برتقالية اللون يُصنع منها قمر الدين الشهي',
+    icon: '🍑',
+    themeId: 'FOOD',
+  },
+  {
+    word: 'بطيخ',
+    category: 'أطعمة وفواكه',
+    hint: 'فاكهة صيفية كروية كبيرة ذات لب أحمر مائي حلو ومنعش في حر الصيف',
+    icon: '🍉',
+    themeId: 'FOOD',
+  },
+  {
+    word: 'زعفران',
+    category: 'أطعمة وتوابل',
+    hint: 'توابل عطرية ثمينة خيوطها حمراء تمنح الأطباق لوناً ذهبياً ونكهة ملكية',
+    icon: '🌸',
+    themeId: 'FOOD',
+  },
+  {
+    word: 'نعناع',
+    category: 'أطعمة وأعشاب',
+    hint: 'نبات عشبي عطري ذكي الرائحة يُعطر الشاي ويهدئ الأعصاب بانتعاشه',
+    icon: '🌿',
+    themeId: 'FOOD',
+  },
+  // رياضة ولياقة وألعاب
+  {
+    word: 'بطولة',
+    category: 'رياضة ومنافسات',
+    hint: 'منافسة رياضية كبرى يتنافس فيها الأبطال للتتويج بالمركز الأول والدرع',
+    icon: '🏆',
+    themeId: 'SPORTS',
+  },
+  {
+    word: 'مباريات',
+    category: 'رياضة وتنافس',
+    hint: 'لقاءات حماسية بين فريقين أو لاعبين تحكمها قوانين ولوائح رياضية',
+    icon: '⚽',
+    themeId: 'SPORTS',
+  },
+  {
+    word: 'أشواط',
+    category: 'رياضة ومباريات',
+    hint: 'فترات زمنية محددة تُقسم إليها المباراة الرياضية للتنافس التكتيكي',
+    icon: '⏱️',
+    themeId: 'SPORTS',
+  },
+  {
+    word: 'أهداف',
+    category: 'رياضة وشباك',
+    hint: 'نقاط الفوز الحاسمة التي تهز الشباك وتلهب حماس الجماهير في المدرجات',
+    icon: '🥅',
+    themeId: 'SPORTS',
+  },
+  {
+    word: 'سباقات',
+    category: 'رياضة وسرعة',
+    hint: 'منافسات سريعة وشيقة يتسابق فيها الرياضيون لقطع المسافة أولاً',
+    icon: '🏃',
+    themeId: 'SPORTS',
+  },
+  {
+    word: 'سباحة',
+    category: 'رياضة ومياه',
+    hint: 'رياضة أولمبية ممتعة تحرك كامل الجسد وتزيد من قوة الرئتين واللياقة',
+    icon: '🏊',
+    themeId: 'SPORTS',
+  },
+  {
+    word: 'رماية',
+    category: 'رياضة ودقة',
+    hint: 'رياضة عربية أصيلة تعتمد على دقة التركيز والتصويب بالسهام أو البنادق',
+    icon: '🎯',
+    themeId: 'SPORTS',
+  },
+  {
+    word: 'فروسية',
+    category: 'رياضة وتراث',
+    hint: 'رياضة نبالة وشجاعة تعبر عن مهارة التحكم بالخيل العربي والقفز الرشيق',
+    icon: '🏇',
+    themeId: 'SPORTS',
+  },
+  {
+    word: 'ميداليات',
+    category: 'رياضة وتكريم',
+    hint: 'أوسمة ذهبية وفضية وبرونزية تُطوق أعناق الفائزين على منصات التتويج',
+    icon: '🏅',
+    themeId: 'SPORTS',
+  },
+  // تاريخ وحضارات ومدن
+  {
+    word: 'أهرام',
+    category: 'تاريخ وحضارات',
+    hint: 'صروح حجرية عملاقة شيدها الفراعنة القدماء تعد من عجائب الدنيا السبع',
+    icon: '🏛️',
+    themeId: 'HISTORY',
+  },
+  {
+    word: 'قرطبة',
+    category: 'تاريخ ومدن',
+    hint: 'حاضرة الأندلس ومنارة العلم والعلماء في العصر الذهبي الإسلامي',
+    icon: '🏰',
+    themeId: 'HISTORY',
+  },
+  {
+    word: 'بغداد',
+    category: 'تاريخ وعواصم',
+    hint: 'دار السلام وعاصمة الخلافة العباسية ومركز بيت الحكمة والعلوم',
+    icon: '🕌',
+    themeId: 'HISTORY',
+  },
+  {
+    word: 'غرناطة',
+    category: 'تاريخ وحضارات',
+    hint: 'درة الأندلس وفردوسها المفقود صاحبة قصر الحمراء الأسطوري الأخاذ',
+    icon: '🏰',
+    themeId: 'HISTORY',
+  },
+  {
+    word: 'أسوار',
+    category: 'تاريخ وقلاع',
+    hint: 'تحصينات حجرية ضخمة كانت تحيط بالمدن العتيقة لحمايتها من الغزاة',
+    icon: '🧱',
+    themeId: 'HISTORY',
+  },
+  {
+    word: 'قوافل',
+    category: 'تاريخ وتجارة',
+    hint: 'مواكب من الإبل والتجار كانت تقطع الصحارى الشاسعة لرحلتي الشتاء والصيف',
+    icon: '🐪',
+    themeId: 'HISTORY',
+  },
+  // أدب ولغة وبلاغة
+  {
+    word: 'قصائد',
+    category: 'أدب وشعر',
+    hint: 'منظومات شعرية فصيحة موزونة المقفى تعبر عن المشاعر والفروسية والحكمة',
+    icon: '📜',
+    themeId: 'LITERATURE',
+  },
+  {
+    word: 'قوافي',
+    category: 'أدب وعروض',
+    hint: 'أواخر الأبيات الشعرية التي تتفق في الحروف والوزن وتمنح الشعر جرساً عذباً',
+    icon: '✒️',
+    themeId: 'LITERATURE',
+  },
+  {
+    word: 'فصاحة',
+    category: 'أدب ولغة',
+    hint: 'بيان اللسان ووضوح المنطق وجمال التعبير بلغة الضاد الخالدة',
+    icon: '🗣️',
+    themeId: 'LITERATURE',
+  },
+  {
+    word: 'ديوان',
+    category: 'أدب وشعر',
+    hint: 'كتاب ومجلد يجمع نتاج الشاعر وقصائده الشعرية الكاملة',
+    icon: '📚',
+    themeId: 'LITERATURE',
+  },
+  {
+    word: 'رواية',
+    category: 'أدب وسرد',
+    hint: 'عمل سردي نثري طويل يحكي أحداثاً وشخصيات مشوقة في سياق درامي ممتع',
+    icon: '📖',
+    themeId: 'LITERATURE',
+  },
+  {
+    word: 'أمثال',
+    category: 'أدب وتراث',
+    hint: 'حكم بليغة موجزة يتناقلها الناس وتلخص تجارب الأجيال بأسلوب مركز',
+    icon: '💡',
+    themeId: 'LITERATURE',
+  },
+  // قيم وأخلاق
+  {
+    word: 'مروءة',
+    category: 'قيم وأخلاق',
+    hint: 'كمال الرجولة وحسن الخلق وعفة النفس وبذل المعروف لمن يحتاجه',
+    icon: '🛡️',
+    themeId: 'VALUES',
+  },
+  {
+    word: 'شهامة',
+    category: 'قيم وأخلاق',
+    hint: 'عزة النفس والنجدة والشجاعة في نصرة الملهوف والوقوف مع الحق',
+    icon: '⚔️',
+    themeId: 'VALUES',
+  },
+  {
+    word: 'عدالة',
+    category: 'قيم وأخلاق',
+    hint: 'إعطاء كل ذي حق حقه وميزان الحكم بالقسطاس المستقيم دون تحيز',
+    icon: '⚖️',
+    themeId: 'VALUES',
+  },
+  {
+    word: 'نزاهة',
+    category: 'قيم وأخلاق',
+    hint: 'البعد عن كل ما يدنس النفس من الطمع أو الشبهات وعفة اليد واللسان',
+    icon: '💎',
+    themeId: 'VALUES',
+  },
+  {
+    word: 'إيثار',
+    category: 'قيم وأخلاق',
+    hint: 'تقديم حاجة الآخرين ومصالحهم على النفس ابتغاء مرضاة الله ورقي الإنسانية',
+    icon: '🤝',
+    themeId: 'VALUES',
+  },
+  {
+    word: 'تسامح',
+    category: 'قيم وأخلاق',
+    hint: 'العفو والصفح الجميل ومقابلة الإساءة بالإحسان ونقاء القلب من الضغينة',
+    icon: '🕊️',
+    themeId: 'VALUES',
   },
 ];
 
 export const TARGET_WORDS: string[] = CURATED_WORDS_WITH_HINTS.map((item) => item.word);
 
-// Map of word -> WordHint with progressive levels
+// Map of word -> WordHint with progressive levels and dictionary definition
 export const WORD_HINTS_MAP = new Map<string, WordHint>(
   CURATED_WORDS_WITH_HINTS.map((item) => {
     const word = item.word;
@@ -625,6 +963,7 @@ export const WORD_HINTS_MAP = new Map<string, WordHint>(
       {
         category: item.category,
         hint: item.hint,
+        dictionaryMeaning: item.hint,
         icon: item.icon,
         firstLetter,
         lastLetter,
@@ -643,12 +982,17 @@ export interface ThemeDefinition {
 }
 
 export const THEME_DEFINITIONS: ThemeDefinition[] = [
-  { id: 'ALL', name: 'جميع المجالات (شامل)', icon: '🌟', description: 'تشكيلة شاملة من كل العلوم والمعارف واللغة' },
-  { id: 'NATURE', name: 'طبيعة وتضاريس وبيئة', icon: '🏞️', description: 'بحار وأنهار وجبال وجزر ونباتات وصحارى' },
-  { id: 'SCIENCE', name: 'فلك وفضاء وتكنولوجيا', icon: '🚀', description: 'كواكب ومجرات وصواريخ وأجهزة ذكية' },
-  { id: 'ANIMALS', name: 'كائنات وحيوانات وطيور', icon: '🦅', description: 'طيور وحيوانات برية ومائية وكائنات أليفة' },
-  { id: 'ARTS', name: 'أدب وفنون وتراث وثقافة', icon: '📚', description: 'شعر ولغة وقصص ورسم وموسيقى وحضارة' },
-  { id: 'VALUES', name: 'قيم وأخلاق ومعانٍ سامية', icon: '⚖️', description: 'شجاعة وكرامة ومروءة وإخلاص وتسامح' },
+  { id: 'ALL', name: 'جميع المجالات (شامل)', icon: '🌟', description: 'تشكيلة شاملة من كل العلوم والمعارف واللغة والتراث' },
+  { id: 'ISLAMIC', name: 'إسلاميات وقرآن وتراث', icon: '🕌', description: 'شعائر، مساجد، آيات، أذكار، ومفاهيم إيمانية أصيلة' },
+  { id: 'NATURE', name: 'طبيعة وتضاريس وبيئة', icon: '🏞️', description: 'بحار، أنهار، جبال، أودية، مناخ، ونباتات بديعة' },
+  { id: 'SCIENCE', name: 'فلك وفضاء وتكنولوجيا', icon: '🚀', description: 'كواكب، مجرات، طاقة، أقمار صناعية، وابتكارات علمية' },
+  { id: 'ANIMALS', name: 'كائنات وحيوانات وطيور', icon: '🦅', description: 'طيور، حيوانات برية، كائنات بحرية، وزواحف' },
+  { id: 'LITERATURE', name: 'أدب ولغة وبلاغة', icon: '📚', description: 'شعر، قوافي، فصاحة، معاجم، وروايات وأمثال' },
+  { id: 'HISTORY', name: 'تاريخ وحضارات ومدن', icon: '🏛️', description: 'قلاع، عواصم عريقة، آثار قديمة، وأحداث خالدة' },
+  { id: 'FOOD', name: 'أطعمة ومأكولات وثمار', icon: '🍎', description: 'فواكه، توابل، أعشاب عطرية، وثمار طيبة ومشروبات' },
+  { id: 'SPORTS', name: 'رياضة ولياقة ومنافسات', icon: '⚽', description: 'بطولات، أهداف، ألعاب قوى، فروسية، وسرعة' },
+  { id: 'VALUES', name: 'قيم وأخلاق ومعانٍ سامية', icon: '⚖️', description: 'شجاعة، كرامة، مروءة، إخلاص، وتسامح ونزاهة' },
+  { id: 'GENERAL', name: 'معارف وحياة عامة ومهن', icon: '🌍', description: 'عمارة، تجارة، علوم تطبيقية، وشؤون مجتمعية' },
 ];
 
 export function getWordsForTheme(themeId?: string): WordClueItem[] {
@@ -656,21 +1000,37 @@ export function getWordsForTheme(themeId?: string): WordClueItem[] {
     return CURATED_WORDS_WITH_HINTS;
   }
   const filtered = CURATED_WORDS_WITH_HINTS.filter((item) => {
+    if (item.themeId && item.themeId === themeId) return true;
     const cat = item.category;
+    if (themeId === 'ISLAMIC') {
+      return cat.includes('إسلام') || cat.includes('مسجد') || cat.includes('قرآن') || cat.includes('عباد') || cat.includes('ذكر') || cat.includes('مناسك');
+    }
     if (themeId === 'NATURE') {
-      return cat.includes('طبيعة') || cat.includes('تضاريس') || cat.includes('بحار') || cat.includes('مياه') || cat.includes('طقس') || cat.includes('نباتات') || cat.includes('أطعمة');
+      return cat.includes('طبيعة') || cat.includes('تضاريس') || cat.includes('بحار') || cat.includes('مياه') || cat.includes('طقس') || cat.includes('نباتات');
     }
     if (themeId === 'SCIENCE') {
-      return cat.includes('فلك') || cat.includes('فضاء') || cat.includes('تكنولوجيا') || cat.includes('أجهزة') || cat.includes('علوم');
+      return cat.includes('فلك') || cat.includes('فضاء') || cat.includes('تكنولوجيا') || cat.includes('أجهزة') || cat.includes('علوم') || cat.includes('طاقة');
     }
     if (themeId === 'ANIMALS') {
       return cat.includes('طيور') || cat.includes('حيوانات') || cat.includes('كائنات') || cat.includes('زواحف');
     }
-    if (themeId === 'ARTS') {
-      return cat.includes('أدب') || cat.includes('شعر') || cat.includes('فنون') || cat.includes('تراث') || cat.includes('ثقافة') || cat.includes('تعليم') || cat.includes('عمارة');
+    if (themeId === 'LITERATURE' || themeId === 'ARTS') {
+      return cat.includes('أدب') || cat.includes('شعر') || cat.includes('فنون') || cat.includes('تراث') || cat.includes('لغة') || cat.includes('بلاغة');
+    }
+    if (themeId === 'HISTORY') {
+      return cat.includes('تاريخ') || cat.includes('حضار') || cat.includes('مدن') || cat.includes('قلاع') || cat.includes('عواصم');
+    }
+    if (themeId === 'FOOD') {
+      return cat.includes('أطعم') || cat.includes('فواكه') || cat.includes('ثمار') || cat.includes('توابل') || cat.includes('أعشاب');
+    }
+    if (themeId === 'SPORTS') {
+      return cat.includes('رياض') || cat.includes('لياق') || cat.includes('أبطال') || cat.includes('مباريات') || cat.includes('سباق');
     }
     if (themeId === 'VALUES') {
-      return cat.includes('قيم') || cat.includes('أخلاق') || cat.includes('مشاعر') || cat.includes('شرف') || cat.includes('إيمان') || cat.includes('طموح');
+      return cat.includes('قيم') || cat.includes('أخلاق') || cat.includes('شرف') || cat.includes('مشاعر') || cat.includes('شهامة') || cat.includes('عدال');
+    }
+    if (themeId === 'GENERAL') {
+      return cat.includes('مهن') || cat.includes('عمارة') || cat.includes('تجارة') || cat.includes('معارف');
     }
     return true;
   });
@@ -692,6 +1052,7 @@ const TARGET_SET = new Set(TARGET_WORDS);
 
 export const VALID_GUESSES_SET: Set<string> = new Set([
   ...TARGET_WORDS,
+  ...ARABIC_5_LETTER_WORDS,
   // Additional valid 5-letter Arabic words to accept during guessing
   'أبيضت', 'أخضرت', 'أحمرت', 'أصفرت', 'أزرقا', 'أسودت', 'رمادية', 'وردية',
   'سوداء', 'بيضاء', 'حمراء', 'صفراء', 'خضراء', 'زرقاء', 'شقراء', 'سمراء',
@@ -723,11 +1084,17 @@ export function getRandomWordClue(): WordClueItem {
 export function getHintForWord(word: string): WordHint {
   const hint = WORD_HINTS_MAP.get(word);
   if (hint) return hint;
+  const firstLetter = word ? word[0] : '';
+  const lastLetter = word && word.length > 0 ? word[word.length - 1] : '';
   return {
-    category: 'كلمات عربية',
-    hint: `كلمة مكوّنة من 5 أحرف تبدأ بحرف "${word[0]}"`,
-    icon: '✨',
-    firstLetter: word[0],
+    category: 'كلمات ومعاجم عربية',
+    hint: `كلمة فصيحة مكوّنة من 5 أحرف تبدأ بحرف "${firstLetter}" وتنتهي بـ "${lastLetter}"`,
+    dictionaryMeaning: `لفظة عربية صحيحة تتألف من 5 أحرف تبدأ بحرف (${firstLetter}) وتختم بحرف (${lastLetter}).`,
+    icon: '📖',
+    firstLetter,
+    lastLetter,
+    level2Hint: `تبدأ بحرف "${firstLetter}"`,
+    level3Hint: `تبدأ بـ "${firstLetter}" وتنتهي بـ "${lastLetter}"`,
   };
 }
 

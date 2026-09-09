@@ -77,6 +77,7 @@ export default function App() {
     submitGuess,
     useJoker,
     eliminatedLetters,
+    updateSettings,
     requestSync,
     addBot,
     removeBot,
@@ -306,6 +307,7 @@ export default function App() {
             isReconnecting={isReconnecting}
             onAddBot={addBot}
             onRemoveBot={removeBot}
+            onUpdateSettings={updateSettings}
           />
         </div>
       )}

@@ -21,7 +21,9 @@ export interface GameSettings {
   showOpponentProgress: boolean;
   hardMode: boolean;
   maxPlayers?: number; // up to 10 players
-  themeCategory?: string; // ALL, NATURE, SCIENCE, ANIMALS, ARTS, VALUES
+  themeCategory?: string; // ALL, ISLAMIC, NATURE, SCIENCE, ANIMALS, LITERATURE, HISTORY, FOOD, SPORTS, VALUES, GENERAL
+  jokerCount?: number; // e.g. 0 (disabled), 1, 2, 3
+  jokerEliminateCount?: number; // e.g. 2, 3, 4 letters to eliminate from keyboard
 }
 
 export interface PlayerRoundStats {
@@ -77,6 +79,8 @@ export interface WordHint {
   lastLetter?: string;
   level2Hint?: string;
   level3Hint?: string;
+  dictionaryMeaning?: string; // تعريف لغوي بسيط من القاموس والمعجم
+  exampleUsage?: string; // سياق توضيحي استئناسي
 }
 
 export interface RoomState {

@@ -5,6 +5,7 @@ export const GAME_CONFIG = {
   defaultMaxAttempts: 8,
   minAttempts: 4,
   maxAttempts: 10,
+  allowedAttempts: [4, 5, 6, 8, 10],
   defaultRounds: 5,
   allowedRounds: [1, 3, 5, 7, 10],
   defaultRoundDurationSeconds: 60,
@@ -16,6 +17,8 @@ export const GAME_CONFIG = {
   maxPlayersPerRoom: 10,
   minPlayersPerRoom: 2,
   allowedMaxPlayers: [2, 3, 4, 5, 6, 8, 10],
+  allowedJokerCounts: [0, 1, 2, 3],
+  allowedJokerEliminates: [2, 3, 4],
   baseScorePerRound: 1000,
   penaltyPerAttempt: 75,
   maxTimeBonus: 300,
@@ -30,6 +33,9 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   showOpponentProgress: true,
   hardMode: false,
   maxPlayers: 10,
+  themeCategory: 'ALL',
+  jokerCount: 1,
+  jokerEliminateCount: 3,
 };
 
 // Arabic Keyboard Layout (Standard responsive RTL order)

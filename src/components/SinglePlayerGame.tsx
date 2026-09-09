@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { GameBoard } from './GameBoard';
 import { ArabicKeyboard } from './ArabicKeyboard';
 import { HintCard } from './HintCard';
-import { getRandomWordClue } from '../game-engine/words-data';
+import { getRandomWordClue, getWordsForTheme, THEME_DEFINITIONS } from '../game-engine/words-data';
 import { validateGuessWord } from '../game-engine/word-validator';
 import { evaluateGuess, isWordSolved } from '../game-engine/guess-evaluator';
 import { TileState, WordHint } from '../shared/types';
@@ -31,15 +31,21 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [letterStatuses, setLetterStatuses] = useState<Record<string, TileState>>({});
   const [jokersRemaining, setJokersRemaining] = useState<number>(1);
+  const [selectedTheme, setSelectedTheme] = useState<string>('ALL');
+  const [isHintModalOpen, setIsHintModalOpen] = useState<boolean>(false);
 
-  const startNewGame = useCallback(() => {
-    const clue = getRandomWordClue();
+  const startNewGame = useCallback((theme?: string) => {
+    const activeTheme = theme || selectedTheme;
+    const themeWords = getWordsForTheme(activeTheme);
+    const clue = themeWords[Math.floor(Math.random() * themeWords.length)] || getRandomWordClue();
     setTargetWord(clue.word);
     setCurrentHint({
       category: clue.category,
       hint: clue.hint,
+      dictionaryMeaning: clue.hint,
       icon: clue.icon,
       firstLetter: clue.word[0],
+      lastLetter: clue.word[clue.word.length - 1],
     });
     setGuesses([]);
     setEvaluations([]);
@@ -50,7 +56,8 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
     setErrorMessage(null);
     setLetterStatuses({});
     setJokersRemaining(1);
-  }, []);
+    setIsHintModalOpen(false);
+  }, [selectedTheme]);
 
   const handleUseJoker = () => {
     if (jokersRemaining <= 0 || isGameOver || isSolved) return;
@@ -117,7 +124,7 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
       return;
     }
 
-    const validation = validateGuessWord(currentGuess, true);
+    const validation = validateGuessWord(currentGuess, false);
     if (!validation.isValid) {
       setErrorMessage(validation.errorMessage || 'الكلمة غير صالحة');
       triggerShake();
@@ -162,13 +169,41 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
 
   return (
     <div id="single-player-container" className="flex flex-col flex-1 min-h-0 max-w-lg mx-auto w-full px-1.5 sm:px-2 py-1.5 sm:py-3 justify-between">
-      {/* Top bar info */}
-      <div className="flex items-center justify-between px-3 py-1.5 rounded-2xl bg-white/[0.04] backdrop-blur-md border border-white/10 text-xs font-bold text-white/70 shadow-xs">
-        <span className="flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-teal-400" />
-          <span>وضع التدريب الفردي</span>
-        </span>
-        <span>المحاولات: {guesses.length} / 8</span>
+      {/* Top bar info & Theme Selector */}
+      <div className="flex flex-col gap-1.5 px-3 py-2 rounded-2xl bg-white/[0.04] backdrop-blur-md border border-white/10 shadow-xs">
+        <div className="flex items-center justify-between text-xs font-bold text-white/70">
+          <span className="flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-teal-400" />
+            <span>وضع التدريب الفردي</span>
+          </span>
+          <span>المحاولات: {guesses.length} / 8</span>
+        </div>
+
+        {/* Theme Category Pills */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 no-scrollbar text-[11px]">
+          <span className="text-white/40 shrink-0 text-[10px]">المجال:</span>
+          {THEME_DEFINITIONS.map((theme) => {
+            const isSelected = selectedTheme === theme.id;
+            return (
+              <button
+                key={theme.id}
+                type="button"
+                onClick={() => {
+                  setSelectedTheme(theme.id);
+                  startNewGame(theme.id);
+                }}
+                className={`px-2 py-0.5 rounded-lg font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1 ${
+                  isSelected
+                    ? 'bg-teal-500/30 text-teal-300 border border-teal-400/40 shadow-xs'
+                    : 'bg-white/[0.05] text-white/60 hover:text-white hover:bg-white/10 border border-transparent'
+                }`}
+              >
+                <span>{theme.icon}</span>
+                <span>{theme.name.split(' ')[0]}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {errorMessage && (
@@ -186,6 +221,8 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
             onNewWord={startNewGame}
             attemptsCount={guesses.length}
             initialExpanded={false}
+            isOpenControlled={isHintModalOpen}
+            onToggleControlled={setIsHintModalOpen}
           />
         </div>
       )}
@@ -250,16 +287,20 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
         </div>
       )}
 
-      {/* Keyboard */}
-      <ArabicKeyboard
-        onChar={handleChar}
-        onDelete={handleDelete}
-        onEnter={handleEnter}
-        letterStatuses={letterStatuses}
-        disabled={isGameOver}
-        onUseJoker={handleUseJoker}
-        jokersRemaining={jokersRemaining}
-      />
+      {/* Keyboard with comfortable bottom elevation */}
+      <div className="w-full pb-4 sm:pb-6 md:pb-8">
+        <ArabicKeyboard
+          onChar={handleChar}
+          onDelete={handleDelete}
+          onEnter={handleEnter}
+          letterStatuses={letterStatuses}
+          disabled={isGameOver}
+          onUseJoker={handleUseJoker}
+          jokersRemaining={jokersRemaining}
+          jokerEliminateCount={3}
+          onOpenHint={currentHint ? () => setIsHintModalOpen(true) : undefined}
+        />
+      </div>
     </div>
   );
 };

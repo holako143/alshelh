@@ -55,6 +55,7 @@ export const DailyChallengeModal: React.FC<DailyChallengeModalProps> = ({
   const [letterStatuses, setLetterStatuses] = useState<Record<string, TileState>>({});
   const [jokersRemaining, setJokersRemaining] = useState<number>(1);
   const [copiedShare, setCopiedShare] = useState<boolean>(false);
+  const [isHintModalOpen, setIsHintModalOpen] = useState<boolean>(false);
 
   // Load / Save Stats
   const [stats, setStats] = useState<DailyStats>(() => {
@@ -189,7 +190,7 @@ export const DailyChallengeModal: React.FC<DailyChallengeModalProps> = ({
       return;
     }
 
-    const validation = validateGuessWord(currentGuess, true);
+    const validation = validateGuessWord(currentGuess, false);
     if (!validation.isValid) {
       setErrorMessage(validation.errorMessage || 'الكلمة غير صالحة');
       setIsShaking(true);
@@ -321,6 +322,8 @@ export const DailyChallengeModal: React.FC<DailyChallengeModalProps> = ({
             hint={currentHint}
             attemptsCount={guesses.length}
             initialExpanded={false}
+            isOpenControlled={isHintModalOpen}
+            onToggleControlled={setIsHintModalOpen}
           />
         </div>
 
@@ -362,8 +365,8 @@ export const DailyChallengeModal: React.FC<DailyChallengeModalProps> = ({
           </div>
         )}
 
-        {/* Keyboard */}
-        <div className="mt-auto pt-2">
+        {/* Keyboard with comfortable bottom elevation */}
+        <div className="mt-auto pt-2 pb-4 sm:pb-6">
           <ArabicKeyboard
             onChar={handleChar}
             onDelete={handleDelete}
@@ -372,6 +375,8 @@ export const DailyChallengeModal: React.FC<DailyChallengeModalProps> = ({
             disabled={isGameOver}
             onUseJoker={handleUseJoker}
             jokersRemaining={jokersRemaining}
+            jokerEliminateCount={3}
+            onOpenHint={currentHint ? () => setIsHintModalOpen(true) : undefined}
           />
         </div>
       </div>
