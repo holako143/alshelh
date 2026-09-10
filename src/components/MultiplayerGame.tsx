@@ -12,7 +12,7 @@ import { WinnerAlertBanner } from './WinnerAlertBanner';
 import { SolveAnnouncement } from '../hooks/useMultiplayerSocket';
 import { soundManager } from '../lib/audio';
 import { fireSolveConfetti } from '../lib/confetti';
-import { WifiOff, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { WifiOff, AlertTriangle, CheckCircle2, Clock, Activity } from 'lucide-react';
 
 interface MultiplayerGameProps {
   roomState: RoomState;
@@ -244,6 +244,8 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
           colorBlindMode={colorBlindMode}
           onToggleColorBlind={onToggleColorBlind}
           playerCount={playerList.length}
+          latencyMs={latencyMs}
+          isReconnecting={isReconnecting}
         />
         <main className="flex-1 flex items-center justify-center p-2">
           <WaitingRoom
@@ -316,8 +318,16 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
         </div>
       )}
 
-      {/* Synchronized Round Time Bar (Unified across all competitors via Server Timestamp) */}
-      {isPlaying && roundStartedAt && (
+      {/* High Latency / Synchronization Warning Alert */}
+      {latencyMs !== null && latencyMs !== undefined && latencyMs > 300 && (
+        <div className="bg-amber-500/20 border-b border-amber-500/30 text-amber-200 px-3 py-1.5 text-xs font-semibold flex items-center justify-center gap-2 backdrop-blur-md animate-pulse">
+          <Activity className="w-3.5 h-3.5 text-amber-300" />
+          <span>تنبيه: يوجد تأخير في مزامنة الوقت مع الخادم ({latencyMs} مللي ثانية)</span>
+        </div>
+      )}
+
+      {/* Synchronized Round Time Bar (Unified across all competitors via Server Timestamp - only when duration is timed) */}
+      {isPlaying && roundStartedAt && roundDurationMs > 0 && (
         <div className="w-full max-w-4xl mx-auto px-2 sm:px-4 pt-1">
           <div className="w-full bg-white/[0.08] rounded-full h-1.5 overflow-hidden backdrop-blur-xs">
             <div
@@ -413,7 +423,10 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
         </div>
 
         {/* On-screen Arabic Keyboard with comfortable bottom elevation */}
-        <div className="pt-2 pb-4 sm:pb-6 md:pb-8">
+        <div
+          className="pt-1 pb-6 sm:pb-8 md:pb-10 mb-2 sm:mb-4 px-1 sm:px-2 transition-all"
+          style={{ paddingBottom: 'max(1.75rem, env(safe-area-inset-bottom, 1.5rem))' }}
+        >
           <ArabicKeyboard
             onChar={handleChar}
             onDelete={handleDelete}
@@ -421,8 +434,13 @@ export const MultiplayerGame: React.FC<MultiplayerGameProps> = ({
             letterStatuses={letterStatuses}
             disabled={isInputDisabled}
             onUseJoker={onUseJoker}
-            jokersRemaining={myPlayerState?.jokersRemaining ?? roomState.settings.jokerCount ?? 1}
+            jokersRemaining={
+              roomState.settings.jokerCount === 0
+                ? 0
+                : (myPlayerState?.jokersRemaining ?? roomState.settings.jokerCount ?? 1)
+            }
             jokerEliminateCount={roomState.settings.jokerEliminateCount ?? 3}
+            jokerDisabled={roomState.settings.jokerCount === 0}
             onOpenHint={roomState.currentHint ? () => setIsHintModalOpen(true) : undefined}
           />
         </div>

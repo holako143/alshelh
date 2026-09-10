@@ -2,7 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { GameSettings } from '../shared/types';
 import { DEFAULT_GAME_SETTINGS, GAME_CONFIG } from '../shared/constants';
 import { THEME_DEFINITIONS } from '../game-engine/words-data';
-import { Users, UserPlus, Gamepad2, Settings2, Copy, Check, Sparkles, Clock, Hash, Eye, Flame, Layers } from 'lucide-react';
+import {
+  Users,
+  UserPlus,
+  Gamepad2,
+  Settings2,
+  Copy,
+  Check,
+  Sparkles,
+  Clock,
+  Hash,
+  Eye,
+  Flame,
+  Layers,
+  Wand2,
+  ChevronDown,
+  ChevronUp,
+  Infinity as InfinityIcon,
+} from 'lucide-react';
 
 interface LobbyProps {
   nickname: string;
@@ -32,6 +49,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   const [activeTab, setActiveTab] = useState<'create' | 'join' | 'solo'>('create');
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [settings, setSettings] = useState<GameSettings>(DEFAULT_GAME_SETTINGS);
+  const [isSettingsExpanded, setIsSettingsExpanded] = useState<boolean>(false);
 
   useEffect(() => {
     if (initialRoomCode) {
@@ -180,151 +198,294 @@ export const Lobby: React.FC<LobbyProps> = ({
 
       {/* Tab 1: Create Room */}
       {activeTab === 'create' && (
-        <form onSubmit={handleCreate} className="bg-white/[0.04] backdrop-blur-2xl rounded-3xl p-6 border border-white/10 shadow-2xl flex flex-col gap-5 text-right">
-          <div className="flex items-center gap-2 text-white font-bold text-sm pb-3 border-b border-white/10">
-            <Settings2 className="w-4 h-4 text-emerald-400" />
-            <span>إعدادات المباراة (للمستضيف)</span>
-          </div>
+        <form onSubmit={handleCreate} className="bg-white/[0.04] backdrop-blur-2xl rounded-3xl p-5 sm:p-6 border border-white/10 shadow-2xl flex flex-col gap-4 sm:gap-5 text-right">
+          <div className="flex items-center justify-between pb-3 border-b border-white/10">
+            <div className="flex items-center gap-2 text-white font-bold text-sm">
+              <Settings2 className="w-4 h-4 text-emerald-400" />
+              <span>إعدادات المباراة (المستضيف)</span>
+            </div>
 
-          {/* Number of Rounds */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-semibold text-white/70 flex items-center gap-1.5">
-              <Hash className="w-3.5 h-3.5 text-emerald-400" />
-              <span>عدد الجولات: {settings.totalRounds}</span>
-            </label>
-            <div className="flex gap-2">
-              {GAME_CONFIG.allowedRounds.map((num) => (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => setSettings({ ...settings, totalRounds: num })}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    settings.totalRounds === num
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-white border-white/30 shadow-lg shadow-emerald-500/25'
-                      : 'bg-white/[0.05] hover:bg-white/[0.10] text-white/70 border-white/10 backdrop-blur-md'
-                  }`}
-                >
-                  {num}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline-flex text-[11px] font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-lg items-center gap-1">
+                <Gamepad2 className="w-3 h-3" />
+                أنت المستضيف وتشارك باللعب
+              </span>
+
+              <button
+                id="btn-toggle-lobby-host-settings"
+                type="button"
+                onClick={() => setIsSettingsExpanded(!isSettingsExpanded)}
+                className="flex items-center gap-1 text-xs font-bold text-emerald-300 hover:text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/25 px-2.5 py-1 rounded-xl border border-emerald-400/30 transition-all cursor-pointer select-none"
+              >
+                <span>{isSettingsExpanded ? 'طي الإعدادات' : 'تخصيص الإعدادات'}</span>
+                {isSettingsExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
             </div>
           </div>
 
-          {/* Round Duration */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-semibold text-white/70 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-emerald-400" />
-              <span>مدة كل جولة: {settings.roundDurationSeconds} ثانية</span>
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {GAME_CONFIG.allowedDurations.map((sec) => (
-                <button
-                  key={sec}
-                  type="button"
-                  onClick={() => setSettings({ ...settings, roundDurationSeconds: sec })}
-                  className={`flex-1 min-w-[3.5rem] py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    settings.roundDurationSeconds === sec
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-white border-white/30 shadow-lg shadow-emerald-500/25'
-                      : 'bg-white/[0.05] hover:bg-white/[0.10] text-white/70 border-white/10 backdrop-blur-md'
-                  }`}
-                >
-                  {sec}ث
-                </button>
-              ))}
-            </div>
+          {/* Host Participation Clarity Banner */}
+          <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-200 text-xs">
+            <Gamepad2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <p className="leading-relaxed">
+              كمستضيف، ستلعب وتنافس مباشرة في الغرفة ضد خصومك بنفس الكلمات والتوقيت 🎮
+            </p>
           </div>
 
-          {/* Max Attempts */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-semibold text-white/70">
-              عدد المحاولات لكل لاعب: {settings.maxAttempts}
-            </label>
-            <div className="flex gap-2">
-              {[6, 8, 10].map((att) => (
-                <button
-                  key={att}
-                  type="button"
-                  onClick={() => setSettings({ ...settings, maxAttempts: att })}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    settings.maxAttempts === att
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-white border-white/30 shadow-lg shadow-emerald-500/25'
-                      : 'bg-white/[0.05] hover:bg-white/[0.10] text-white/70 border-white/10 backdrop-blur-md'
-                  }`}
-                >
-                  {att} محاولات
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Max Players in Room */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-semibold text-white/70 flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-emerald-400" />
-              <span>الحد الأقصى للاعبين: {settings.maxPlayers || 10} لاعبين</span>
-            </label>
-            <div className="flex gap-2">
-              {GAME_CONFIG.allowedMaxPlayers.map((count) => (
-                <button
-                  key={count}
-                  type="button"
-                  onClick={() => setSettings({ ...settings, maxPlayers: count })}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    (settings.maxPlayers || 10) === count
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-white border-white/30 shadow-lg shadow-emerald-500/25'
-                      : 'bg-white/[0.05] hover:bg-white/[0.10] text-white/70 border-white/10 backdrop-blur-md'
-                  }`}
-                >
-                  {count}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Word Category Theme */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-semibold text-white/70 flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-emerald-400" />
-              <span>مجال وموضوع الكلمات: {THEME_DEFINITIONS.find((t) => t.id === settings.themeCategory)?.name || 'جميع المجالات'}</span>
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {THEME_DEFINITIONS.map((theme) => {
-                const isSelected = (settings.themeCategory || 'ALL') === theme.id;
-                return (
-                  <button
-                    key={theme.id}
-                    type="button"
-                    onClick={() => setSettings({ ...settings, themeCategory: theme.id })}
-                    className={`p-2.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 cursor-pointer ${
-                      isSelected
-                        ? 'bg-gradient-to-r from-emerald-500/90 to-teal-500/90 text-white border-white/30 shadow-md shadow-emerald-500/20'
-                        : 'bg-white/[0.04] hover:bg-white/[0.08] text-white/75 border-white/10'
-                    }`}
-                  >
-                    <span className="text-base">{theme.icon}</span>
-                    <span className="truncate">{theme.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Show Opponent Progress Toggle */}
-          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-md">
-            <div className="text-xs">
-              <div className="font-bold text-white flex items-center gap-1.5">
-                <Eye className="w-3.5 h-3.5 text-emerald-400" />
-                <span>إظهار تقدم الخصم المباشر</span>
+          {/* Collapsed Quick Summary */}
+          {!isSettingsExpanded && (
+            <div className="flex flex-col gap-2 p-3.5 rounded-2xl bg-white/[0.03] border border-white/8">
+              <div className="flex items-center justify-between text-xs text-white/80">
+                <span className="font-semibold text-white/90">الإعدادات الحالية المعتمدة:</span>
+                <span className="text-[11px] text-emerald-300 font-medium">افتراضية محسّنة ⚡</span>
               </div>
-              <div className="text-white/50 mt-0.5">يعرض نمط التخمينات للخصم دون كشف الأحرف السرية</div>
+              <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-medium text-white/70 pt-1">
+                <span className="bg-white/[0.05] border border-white/10 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                  <Hash className="w-3 h-3 text-emerald-400" />
+                  {settings.totalRounds} {settings.totalRounds === 1 ? 'جولة واحدة' : 'جولات'}
+                </span>
+                <span className="bg-white/[0.05] border border-white/10 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-cyan-400" />
+                  {settings.roundDurationSeconds === 0 ? (
+                    <span className="flex items-center gap-1 text-cyan-300 font-bold">
+                      <InfinityIcon className="w-3 h-3" />
+                      <span>بدون وقت (لا نهائي)</span>
+                    </span>
+                  ) : (
+                    <span>{settings.roundDurationSeconds} ثانية لكل جولة</span>
+                  )}
+                </span>
+                <span className="bg-white/[0.05] border border-white/10 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                  <Wand2 className="w-3 h-3 text-purple-400" />
+                  {(settings.jokerCount ?? 1) === 0
+                    ? 'الجوكر معطل'
+                    : `${settings.jokerCount ?? 1} جوكر (حذف ${settings.jokerEliminateCount ?? 3} أحرف)`}
+                </span>
+                <span className="bg-white/[0.05] border border-white/10 px-2 py-0.5 rounded-lg">
+                  {settings.maxAttempts} محاولات
+                </span>
+                <span className="bg-white/[0.05] border border-white/10 px-2 py-0.5 rounded-lg">
+                  {settings.maxPlayers || 2} لاعبين كحد أقصى
+                </span>
+                <span className="bg-white/[0.05] border border-white/10 px-2 py-0.5 rounded-lg">
+                  {THEME_DEFINITIONS.find((t) => t.id === settings.themeCategory)?.name || 'جميع المجالات'}
+                </span>
+              </div>
             </div>
-            <input
-              type="checkbox"
-              checked={settings.showOpponentProgress}
-              onChange={(e) => setSettings({ ...settings, showOpponentProgress: e.target.checked })}
-              className="w-5 h-5 accent-emerald-500 cursor-pointer rounded"
-            />
-          </div>
+          )}
+
+          {/* Full Host Settings when Expanded */}
+          {isSettingsExpanded && (
+            <div className="flex flex-col gap-4.5 animate-in fade-in duration-150">
+              {/* Number of Rounds */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold text-white/70 flex items-center gap-1.5">
+                  <Hash className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>عدد الجولات: {settings.totalRounds}</span>
+                </label>
+                <div className="flex gap-2">
+                  {GAME_CONFIG.allowedRounds.map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setSettings({ ...settings, totalRounds: num })}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        settings.totalRounds === num
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-white border-white/30 shadow-lg shadow-emerald-500/25'
+                          : 'bg-white/[0.05] hover:bg-white/[0.10] text-white/70 border-white/10 backdrop-blur-md'
+                      }`}
+                    >
+                      {num} {num === 1 ? 'جولة' : 'جولات'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Round Duration */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold text-white/70 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>
+                    مدة كل جولة:{' '}
+                    {settings.roundDurationSeconds === 0 ? 'بدون وقت (لا نهائي ∞)' : `${settings.roundDurationSeconds} ثانية`}
+                  </span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {GAME_CONFIG.allowedDurations.map((sec) => (
+                    <button
+                      key={sec}
+                      type="button"
+                      onClick={() => setSettings({ ...settings, roundDurationSeconds: sec })}
+                      className={`flex-1 min-w-[3.8rem] py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        settings.roundDurationSeconds === sec
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-white border-white/30 shadow-lg shadow-emerald-500/25'
+                          : 'bg-white/[0.05] hover:bg-white/[0.10] text-white/70 border-white/10 backdrop-blur-md'
+                      }`}
+                    >
+                      {sec === 0 ? 'بدون وقت ∞' : `${sec}ث`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Max Attempts */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold text-white/70">
+                  عدد المحاولات لكل لاعب: {settings.maxAttempts}
+                </label>
+                <div className="flex gap-2">
+                  {[6, 8, 10].map((att) => (
+                    <button
+                      key={att}
+                      type="button"
+                      onClick={() => setSettings({ ...settings, maxAttempts: att })}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        settings.maxAttempts === att
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-white border-white/30 shadow-lg shadow-emerald-500/25'
+                          : 'bg-white/[0.05] hover:bg-white/[0.10] text-white/70 border-white/10 backdrop-blur-md'
+                      }`}
+                    >
+                      {att} محاولات
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Max Players in Room */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold text-white/70 flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>الحد الأقصى للاعبين: {settings.maxPlayers || 2} لاعبين</span>
+                </label>
+                <div className="flex gap-2">
+                  {GAME_CONFIG.allowedMaxPlayers.map((count) => (
+                    <button
+                      key={count}
+                      type="button"
+                      onClick={() => setSettings({ ...settings, maxPlayers: count })}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        (settings.maxPlayers || 2) === count
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-white border-white/30 shadow-lg shadow-emerald-500/25'
+                          : 'bg-white/[0.05] hover:bg-white/[0.10] text-white/70 border-white/10 backdrop-blur-md'
+                      }`}
+                    >
+                      {count} لاعبين
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Word Category Theme */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold text-white/70 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>مجال وموضوع الكلمات: {THEME_DEFINITIONS.find((t) => t.id === settings.themeCategory)?.name || 'جميع المجالات'}</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {THEME_DEFINITIONS.map((theme) => {
+                    const isSelected = (settings.themeCategory || 'ALL') === theme.id;
+                    return (
+                      <button
+                        key={theme.id}
+                        type="button"
+                        onClick={() => setSettings({ ...settings, themeCategory: theme.id })}
+                        className={`p-2.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 cursor-pointer ${
+                          isSelected
+                            ? 'bg-gradient-to-r from-emerald-500/90 to-teal-500/90 text-white border-white/30 shadow-md shadow-emerald-500/20'
+                            : 'bg-white/[0.04] hover:bg-white/[0.08] text-white/75 border-white/10'
+                        }`}
+                      >
+                        <span className="text-base">{theme.icon}</span>
+                        <span className="truncate">{theme.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Joker Power-Up Setting & Controls */}
+              <div className="flex flex-col gap-2.5 p-3.5 rounded-2xl bg-purple-950/20 border border-purple-500/30 backdrop-blur-md">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Wand2 className="w-4 h-4 text-purple-400 animate-pulse" />
+                    <span>خيار الجوكر (مساعدات الحذف):</span>
+                  </label>
+                  <span className="text-xs font-black text-purple-300">
+                    {(settings.jokerCount ?? 1) === 0 ? 'معطل ✕' : `${settings.jokerCount ?? 1} جوكر لكل جولة`}
+                  </span>
+                </div>
+                <p className="text-[11px] text-white/60 leading-relaxed">
+                  الجوكر يساعد اللاعب في حذف أحرف خاطئة من لوحة المفاتيح غير موجودة في الكلمة السرية 🃏
+                </p>
+                <div className="flex gap-2">
+                  {GAME_CONFIG.allowedJokerCounts.map((count) => (
+                    <button
+                      key={count}
+                      type="button"
+                      onClick={() => setSettings({ ...settings, jokerCount: count })}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        (settings.jokerCount ?? 1) === count
+                          ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white border-white/30 shadow-lg shadow-purple-500/25 ring-1 ring-purple-300/40'
+                          : 'bg-white/[0.04] hover:bg-white/[0.08] text-white/70 border-white/10'
+                      }`}
+                    >
+                      {count === 0 ? 'معطل (0)' : `${count} جوكر`}
+                    </button>
+                  ))}
+                </div>
+
+                {(settings.jokerCount ?? 1) > 0 && (
+                  <div className="flex items-center justify-between pt-2 border-t border-purple-500/15">
+                    <span className="text-[11px] text-white/70">عدد الحروف المحذوفة:</span>
+                    <div className="flex gap-1.5">
+                      {GAME_CONFIG.allowedJokerEliminates.map((num) => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => setSettings({ ...settings, jokerEliminateCount: num })}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                            (settings.jokerEliminateCount ?? 3) === num
+                              ? 'bg-purple-500/40 text-purple-200 border-purple-400/50'
+                              : 'bg-white/[0.03] text-white/50 border-white/10 hover:text-white'
+                          }`}
+                        >
+                          حذف {num} أحرف
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Show Opponent Progress Toggle */}
+              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-md">
+                <div className="text-xs">
+                  <div className="font-bold text-white flex items-center gap-1.5">
+                    <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>إظهار تقدم الخصم المباشر</span>
+                  </div>
+                  <div className="text-white/50 mt-0.5">يعرض نمط التخمينات للخصم دون كشف الأحرف السرية</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.showOpponentProgress}
+                  onChange={(e) => setSettings({ ...settings, showOpponentProgress: e.target.checked })}
+                  className="w-5 h-5 accent-emerald-500 cursor-pointer rounded"
+                />
+              </div>
+
+              {/* Fold Button */}
+              <div className="pt-1 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsExpanded(false)}
+                  className="text-xs text-white/60 hover:text-white flex items-center gap-1 py-1 px-3 rounded-xl bg-white/[0.04] border border-white/10 cursor-pointer"
+                >
+                  <span>طي وحفظ الإعدادات</span>
+                  <ChevronUp className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
 
           <button
             id="btn-submit-create-room"

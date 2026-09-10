@@ -166,14 +166,43 @@ export class RoomManager {
     const normalizedRoomCode = roomCode.trim().toUpperCase();
     let room = this.rooms.get(normalizedRoomCode);
     if (!room) {
-      // Auto-heal: If joining a valid 5-character code, initialize room so players are never blocked
+      // Auto-heal: If joining a valid 5-character code, initialize room with this player as host!
       if (normalizedRoomCode.length === 5) {
-        this.createRoom('host_' + normalizedRoomCode, 'المستضيف', 'tok_host_' + normalizedRoomCode, undefined, normalizedRoomCode);
+        this.createRoom(playerId, nickname || 'المستضيف', sessionToken, undefined, normalizedRoomCode);
         room = this.rooms.get(normalizedRoomCode);
       }
       if (!room) {
         return { success: false, error: 'رمز الغرفة غير موجود' };
       }
+    }
+
+    // If room has an unattached placeholder host, transfer host role to this real player
+    if (room.hostPlayerId.startsWith('host_') && !room.players[room.hostPlayerId]?.isConnected) {
+      delete room.players[room.hostPlayerId];
+      room.hostPlayerId = playerId;
+      room.players[playerId] = {
+        id: playerId,
+        nickname: nickname.trim() || 'المستضيف',
+        role: 'host',
+        isReady: true,
+        isConnected: true,
+        connectedAt: Date.now(),
+        disconnectedAt: null,
+        totalScore: 0,
+        roundsWon: 0,
+        wordsSolved: 0,
+        totalAttempts: 0,
+        totalTimeMs: 0,
+        currentGuesses: [],
+        currentEvaluations: [],
+        hasSolved: false,
+        hasExhausted: false,
+        finishedAt: null,
+        jokersRemaining: room.settings.jokerCount !== undefined ? room.settings.jokerCount : 1,
+      };
+      room.stateVersion++;
+      room.updatedAt = Date.now();
+      return { success: true, state: this.sanitizeStateForPlayer(room, playerId) };
     }
 
     // Check if player is already in this room (reconnection or socket re-join)
@@ -362,6 +391,7 @@ export class RoomManager {
       p.hasSolved = false;
       p.hasExhausted = false;
       p.finishedAt = null;
+      p.jokersRemaining = room.settings.jokerCount !== undefined ? room.settings.jokerCount : 1;
     }
 
     // Determine duration for this round (custom or standard)
@@ -559,9 +589,10 @@ export class RoomManager {
       (ch) => !secretLetters.has(ch) && !guessedLetters.has(ch)
     );
 
-    // Shuffle and pick up to 3
+    // Shuffle and pick eliminated letters
     const shuffled = candidateLetters.sort(() => Math.random() - 0.5);
-    const eliminatedLetters = shuffled.slice(0, 3);
+    const eliminateCount = room.settings.jokerEliminateCount ?? 3;
+    const eliminatedLetters = shuffled.slice(0, eliminateCount);
 
     player.jokersRemaining = Math.max(0, (player.jokersRemaining ?? 1) - 1);
     room.stateVersion++;
@@ -805,7 +836,7 @@ export class RoomManager {
     this.tickInterval = setInterval(() => {
       const now = Date.now();
       for (const room of this.rooms.values()) {
-        if (room.status === 'PLAYING' && room.roundStartedAt) {
+        if (room.status === 'PLAYING' && room.roundStartedAt && room.roundDurationMs > 0) {
           const expiresAt = room.roundStartedAt + room.roundDurationMs;
           if (now >= expiresAt) {
             // Round expired by server clock!

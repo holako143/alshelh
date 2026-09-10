@@ -12,6 +12,7 @@ import { GameHeader } from './components/GameHeader';
 import { GameSettings } from './shared/types';
 import { clientRoomEngine } from './game-engine/client-room-engine';
 import { safeFetchJson } from './lib/api-client';
+import { soundManager } from './lib/audio';
 
 export default function App() {
   const [view, setView] = useState<'lobby' | 'multiplayer' | 'singleplayer'>('lobby');
@@ -109,22 +110,24 @@ export default function App() {
       const roomCode = clientRoomEngine.generateRoomCode();
       clientRoomEngine.createRoom(playerId, nickname, sessionToken, settings, roomCode);
 
-      // 2. Transition immediately so there is ZERO black screen or waiting spinner
+      // 2. Persist to server API first so server room is ready with exact host ID and settings
+      try {
+        await safeFetchJson<{ roomCode: string }>('/api/rooms/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomCode,
+            hostId: playerId,
+            nickname,
+            sessionToken,
+            settings,
+          }),
+        });
+      } catch {}
+
+      // 3. Transition to multiplayer arena
       setActiveRoomCode(roomCode);
       setView('multiplayer');
-
-      // 3. Persist to serverless API in background with matching roomCode
-      safeFetchJson<{ roomCode: string }>('/api/rooms/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          roomCode,
-          hostId: playerId,
-          nickname,
-          sessionToken,
-          settings,
-        }),
-      }).catch(() => {});
     } catch (err: any) {
       setErrorMessage(err.message || 'حدث خطأ في إنشاء الغرفة');
     } finally {
@@ -300,7 +303,10 @@ export default function App() {
             onToggleColorBlind={handleToggleColorBlind}
             solveAnnouncement={solveAnnouncement}
             onDismissSolveAnnouncement={dismissSolveAnnouncement}
-            onUseJoker={useJoker}
+            onUseJoker={() => {
+              soundManager.playJokerPowerUp();
+              useJoker();
+            }}
             eliminatedLetters={eliminatedLetters}
             latencyMs={latencyMs}
             isReconnecting={isReconnecting}

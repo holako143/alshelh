@@ -109,13 +109,45 @@ export class ServerlessRoomManager {
 
     if (!room) {
       // Auto-heal / restore room from invite context if lambda was restarted
-      const hostName = fallbackHostName || 'المستضيف';
-      const created = this.createRoom('host_' + code, hostName, 'tok_host_' + code, fallbackSettings, code);
+      const hostName = fallbackHostName || nickname || 'المستضيف';
+      const created = this.createRoom(playerId, hostName, 'tok_' + playerId, fallbackSettings, code);
       room = this.rooms.get(code);
     }
 
     if (!room) {
       return { success: false, error: 'رمز الغرفة غير موجود أو انتهت صلاحيتها' };
+    }
+
+    // Transfer placeholder host to real joining player
+    if (room.hostPlayerId.startsWith('host_') && !room.players[room.hostPlayerId]?.isConnected) {
+      delete room.players[room.hostPlayerId];
+      room.hostPlayerId = playerId;
+      room.players[playerId] = {
+        id: playerId,
+        nickname: nickname.trim().substring(0, 20) || 'المستضيف',
+        role: 'host',
+        isReady: true,
+        isConnected: true,
+        connectedAt: Date.now(),
+        disconnectedAt: null,
+        totalScore: 0,
+        roundsWon: 0,
+        wordsSolved: 0,
+        totalAttempts: 0,
+        totalTimeMs: 0,
+        currentGuesses: [],
+        currentEvaluations: [],
+        hasSolved: false,
+        hasExhausted: false,
+        finishedAt: null,
+        jokersRemaining: room.settings.jokerCount !== undefined ? room.settings.jokerCount : 1,
+      };
+      room.updatedAt = Date.now();
+      room.stateVersion++;
+      return {
+        success: true,
+        state: this.sanitizeStateForPlayer(room, playerId),
+      };
     }
 
     this.checkRoundTimeout(room);
@@ -326,7 +358,7 @@ export class ServerlessRoomManager {
   }
 
   private checkRoundTimeout(room: RoomState): void {
-    if (room.status === 'PLAYING' && room.roundStartedAt) {
+    if (room.status === 'PLAYING' && room.roundStartedAt && room.roundDurationMs > 0) {
       const now = Date.now();
       if (now >= room.roundStartedAt + room.roundDurationMs) {
         this.endRound(room);

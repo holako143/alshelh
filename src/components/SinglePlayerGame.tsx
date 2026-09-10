@@ -287,8 +287,11 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
         </div>
       )}
 
-      {/* Keyboard with comfortable bottom elevation */}
-      <div className="w-full pb-4 sm:pb-6 md:pb-8">
+      {/* Keyboard with comfortable mobile bottom elevation */}
+      <div
+        className="w-full pt-1 pb-6 sm:pb-8 md:pb-10 mb-2 sm:mb-4 px-1 sm:px-2 transition-all"
+        style={{ paddingBottom: 'max(1.75rem, env(safe-area-inset-bottom, 1.5rem))' }}
+      >
         <ArabicKeyboard
           onChar={handleChar}
           onDelete={handleDelete}

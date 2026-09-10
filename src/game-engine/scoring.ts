@@ -37,8 +37,11 @@ export function calculateRoundScore(
   // Penalty grows with each additional attempt after the 1st
   const attemptPenalty = Math.max(0, (attemptsUsed - 1) * GAME_CONFIG.penaltyPerAttempt);
 
-  // Time bonus: percentage of time saved * maxTimeBonus
-  const timeFractionRemaining = Math.max(0, Math.min(1, (roundDurationMs - timeTakenMs) / roundDurationMs));
+  // Time bonus: percentage of time saved * maxTimeBonus (or standard bonus if infinite duration)
+  const timeFractionRemaining =
+    roundDurationMs > 0
+      ? Math.max(0, Math.min(1, (roundDurationMs - timeTakenMs) / roundDurationMs))
+      : 0.5;
   const timeBonus = Math.round(timeFractionRemaining * GAME_CONFIG.maxTimeBonus);
 
   const totalScore = Math.max(100, baseScore - attemptPenalty + timeBonus);
