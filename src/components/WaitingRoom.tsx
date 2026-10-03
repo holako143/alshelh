@@ -429,16 +429,23 @@ export const WaitingRoom: React.FC<WaitingRoomProps> = ({
       {/* Host / Guest Action Button */}
       {roomState.status !== 'COUNTDOWN' && (
         <div className="flex flex-col gap-2 pt-1">
-          {isHost && connectedPlayers.length >= 2 && onStartMatch && (
-            <button
-              id="btn-host-start-match"
-              type="button"
-              onClick={onStartMatch}
-              className="w-full py-3.5 sm:py-4 rounded-xl font-black text-base bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-white shadow-xl shadow-emerald-500/30 border border-white/20 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
-            >
-              <Play className="w-5 h-5 fill-white" />
-              <span>بدء المباراة الآن ⚡</span>
-            </button>
+          {isHost && onStartMatch && (
+            <div className="flex flex-col gap-1.5">
+              <button
+                id="btn-host-start-match"
+                type="button"
+                onClick={onStartMatch}
+                className="w-full py-3.5 sm:py-4 rounded-xl font-black text-base bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-white shadow-xl shadow-emerald-500/30 border border-white/20 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Play className="w-5 h-5 fill-white" />
+                <span>بدء المباراة الآن ⚡</span>
+              </button>
+              {connectedPlayers.length < 2 && (
+                <p className="text-[11px] text-emerald-300/80 text-center">
+                  🎮 ستشارك باللعب مباشرة — سينضم روبوت ذكي كمنافس لك تلقائياً عند البدء
+                </p>
+              )}
+            </div>
           )}
 
           {!isHost && connectedPlayers.length >= 2 && (

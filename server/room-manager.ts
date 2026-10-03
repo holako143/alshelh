@@ -11,6 +11,7 @@ import { DEFAULT_GAME_SETTINGS, GAME_CONFIG, ARABIC_LETTERS_SET } from '../src/s
 import { selectSecretWord, validateGuessWord } from '../src/game-engine/word-validator';
 import { evaluateGuess, isWordSolved } from '../src/game-engine/guess-evaluator';
 import { calculateRoundScore, determineRoundWinner, determineMatchWinner } from '../src/game-engine/scoring';
+import { CURATED_WORDS_WITH_HINTS } from '../src/game-engine/words-data';
 
 interface ConnectedClient {
   ws: WebSocket;
@@ -32,6 +33,8 @@ export class RoomManager {
   private tickInterval: NodeJS.Timeout | null = null;
   // Debounce timers for momentary disconnects to avoid flashing alert banners on minor network jitter
   private disconnectDebounceTimers: Map<string, NodeJS.Timeout> = new Map();
+  // Bot timers per room
+  private botTimers: Map<string, NodeJS.Timeout[]> = new Map();
 
   constructor() {
     this.startServerGameLoop();
@@ -309,15 +312,91 @@ export class RoomManager {
   }
 
   /**
-   * Host starts the match manually if at least 2 players are ready
+   * Add automated bot player to the room
+   */
+  public addBot(roomCode: string, botName: string = 'الذكي 🤖'): boolean {
+    const room = this.rooms.get(roomCode.trim().toUpperCase());
+    if (!room || (room.status !== 'WAITING' && room.status !== 'READY_CHECK')) return false;
+
+    const maxPlayers = room.settings.maxPlayers || 2;
+    if (Object.keys(room.players).length >= maxPlayers) return false;
+
+    const botId = 'bot_' + Math.random().toString(36).substring(2, 8);
+    const botPlayer: PlayerState = {
+      id: botId,
+      nickname: botName,
+      role: 'guest',
+      isReady: true,
+      isConnected: true,
+      isBot: true,
+      connectedAt: Date.now(),
+      disconnectedAt: null,
+      totalScore: 0,
+      roundsWon: 0,
+      wordsSolved: 0,
+      totalAttempts: 0,
+      totalTimeMs: 0,
+      currentGuesses: [],
+      currentEvaluations: [],
+      hasSolved: false,
+      hasExhausted: false,
+      finishedAt: null,
+      jokersRemaining: room.settings.jokerCount !== undefined ? room.settings.jokerCount : 1,
+    };
+
+    if (!room.guestPlayerId) {
+      room.guestPlayerId = botId;
+    }
+    room.players[botId] = botPlayer;
+    if (Object.keys(room.players).length >= 2) {
+      room.status = 'READY_CHECK';
+    }
+    room.stateVersion++;
+    room.updatedAt = Date.now();
+
+    this.broadcastStateSync(room);
+    return true;
+  }
+
+  /**
+   * Remove automated bot player from the room
+   */
+  public removeBot(roomCode: string, botId?: string): boolean {
+    const room = this.rooms.get(roomCode.trim().toUpperCase());
+    if (!room || (room.status !== 'WAITING' && room.status !== 'READY_CHECK')) return false;
+
+    const targetBotId = botId || Object.keys(room.players).find((id) => id.startsWith('bot_') || room.players[id]?.isBot);
+    if (!targetBotId) return false;
+
+    delete room.players[targetBotId];
+    if (room.guestPlayerId === targetBotId) {
+      const remainingGuests = Object.keys(room.players).filter((id) => id !== room.hostPlayerId);
+      room.guestPlayerId = remainingGuests.length > 0 ? remainingGuests[0] : null;
+    }
+
+    if (Object.keys(room.players).length < 2) {
+      room.status = 'WAITING';
+    }
+    room.stateVersion++;
+    room.updatedAt = Date.now();
+
+    this.broadcastStateSync(room);
+    return true;
+  }
+
+  /**
+   * Host starts the match manually
    */
   public startMatch(roomCode: string, hostPlayerId: string): boolean {
     const room = this.rooms.get(roomCode.trim().toUpperCase());
-    if (!room || room.hostPlayerId !== hostPlayerId) return false;
-    if (room.status !== 'WAITING' && room.status !== 'READY_CHECK') return false;
+    if (!room) return false;
+    if (room.status !== 'WAITING' && room.status !== 'READY_CHECK' && room.status !== 'COUNTDOWN') return false;
 
     const connectedPlayers = Object.values(room.players).filter((p) => p.isConnected);
-    if (connectedPlayers.length < 2) return false;
+    // If only host is in the room, spawn a bot automatically so the host can play and compete!
+    if (connectedPlayers.length < 2) {
+      this.addBot(roomCode, 'الذكي 🤖');
+    }
 
     // Immediately start round with zero delay when host starts match!
     this.startNextRound(room);
@@ -329,7 +408,7 @@ export class RoomManager {
    */
   public updateSettings(roomCode: string, playerId: string, newSettings: Partial<GameSettings>): boolean {
     const room = this.rooms.get(roomCode.trim().toUpperCase());
-    if (!room || room.hostPlayerId !== playerId || room.status !== 'WAITING' && room.status !== 'READY_CHECK') {
+    if (!room || (room.status !== 'WAITING' && room.status !== 'READY_CHECK')) {
       return false;
     }
 
@@ -337,7 +416,7 @@ export class RoomManager {
       ...room.settings,
       ...newSettings,
     };
-    room.roundDurationMs = room.settings.roundDurationSeconds * 1000;
+    room.roundDurationMs = (room.settings.roundDurationSeconds ?? 180) * 1000;
     room.stateVersion++;
     room.updatedAt = Date.now();
 
@@ -423,6 +502,54 @@ export class RoomManager {
 
     // Also send fresh state sync
     this.broadcastStateSync(room);
+
+    // Schedule AI Bot actions for this round
+    this.scheduleBotsForRound(room);
+  }
+
+  private scheduleBotsForRound(room: RoomState) {
+    const roomCode = room.roomCode;
+    const existing = this.botTimers.get(roomCode);
+    if (existing) {
+      existing.forEach((t) => clearTimeout(t));
+    }
+    this.botTimers.set(roomCode, []);
+
+    const bots = Object.values(room.players).filter((p) => p.isBot || p.id.startsWith('bot_'));
+    if (bots.length === 0) return;
+
+    const secretWord = room.currentSecretWord || '';
+    const wordList = CURATED_WORDS_WITH_HINTS.map((c) => c.word);
+
+    bots.forEach((bot) => {
+      const willSolve = Math.random() > 0.15;
+      const solveAttempt = willSolve ? Math.floor(Math.random() * 3) + 2 : 99;
+
+      let accumulatedDelay = Math.floor(Math.random() * 2500) + 3500; // 3.5s - 6s for first guess
+
+      for (let attempt = 1; attempt <= room.settings.maxAttempts; attempt++) {
+        const isSolvingAttempt = attempt === solveAttempt;
+        const currentAttempt = attempt;
+
+        const timer = setTimeout(() => {
+          if (room.status !== 'PLAYING') return;
+          if (bot.hasSolved || bot.hasExhausted) return;
+
+          let guessWord = '';
+          if (isSolvingAttempt) {
+            guessWord = secretWord;
+          } else {
+            const candidates = wordList.filter((w) => w !== secretWord && !bot.currentGuesses.includes(w));
+            guessWord = candidates[Math.floor(Math.random() * candidates.length)] || 'مدينة';
+          }
+
+          this.submitGuess(roomCode, bot.id, room.currentRound, guessWord, 'bot_act_' + currentAttempt + '_' + Date.now());
+        }, accumulatedDelay);
+
+        this.botTimers.get(roomCode)?.push(timer);
+        accumulatedDelay += Math.floor(Math.random() * 4000) + 5000; // 5-9s between guesses
+      }
+    });
   }
 
   /**
@@ -667,6 +794,13 @@ export class RoomManager {
     room.stateVersion++;
     room.updatedAt = now;
 
+    // Clear any bot timers for this room
+    const existingBotTimers = this.botTimers.get(room.roomCode);
+    if (existingBotTimers) {
+      existingBotTimers.forEach((t) => clearTimeout(t));
+      this.botTimers.set(room.roomCode, []);
+    }
+
     // Broadcast ROUND_ENDED with revealed secret word
     this.broadcastToRoom(room.roomCode, {
       type: 'ROUND_ENDED',
@@ -679,8 +813,8 @@ export class RoomManager {
       serverTimestamp: now,
     });
 
-    // Check if match is finished
-    const isFinalRound = room.currentRound >= room.settings.totalRounds;
+    // Check if match is finished (strictly honors host's totalRounds)
+    const isFinalRound = room.currentRound >= (room.settings.totalRounds || 1);
 
     setTimeout(() => {
       if (room.status !== 'ROUND_ENDING') return;

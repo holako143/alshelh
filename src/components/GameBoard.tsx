@@ -46,6 +46,17 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       rowEvaluations.length === wordLength &&
       rowEvaluations.every((s) => s === 'CORRECT');
 
+    let tileSizeClass = 'w-8 h-8 xs:w-9 xs:h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 text-base xs:text-lg sm:text-2xl';
+    if (wordLength <= 3) {
+      tileSizeClass = 'w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16 text-xl xs:text-2xl sm:text-3xl';
+    } else if (wordLength === 4) {
+      tileSizeClass = 'w-10 h-10 xs:w-11 xs:h-11 sm:w-13 sm:h-13 md:w-14 md:h-14 text-lg xs:text-xl sm:text-2xl';
+    } else if (wordLength === 6) {
+      tileSizeClass = 'w-7 h-7 xs:w-8 xs:h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 text-sm xs:text-base sm:text-xl';
+    } else if (wordLength >= 7) {
+      tileSizeClass = 'w-6 h-6 xs:w-7 xs:h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 text-xs xs:text-sm sm:text-lg';
+    }
+
     const tiles = [];
     for (let colIndex = 0; colIndex < wordLength; colIndex++) {
       const char = rowLetters[colIndex] || '';
@@ -95,7 +106,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           key={colIndex}
           id={`tile-r${rowIndex}-c${colIndex}`}
           style={animStyle}
-          className={`relative overflow-hidden w-8 h-8 xs:w-9 xs:h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-lg sm:rounded-xl flex items-center justify-center text-base xs:text-lg sm:text-2xl font-bold select-none transition-colors duration-200 ${bgClass} ${animClass}`}
+          className={`relative overflow-hidden ${tileSizeClass} rounded-lg sm:rounded-xl flex items-center justify-center font-bold select-none transition-colors duration-200 ${bgClass} ${animClass}`}
         >
           {hasSweep && <span className="light-sweep-beam" />}
           {icon}

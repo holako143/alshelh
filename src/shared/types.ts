@@ -55,6 +55,7 @@ export interface PlayerState {
   hasExhausted: boolean;
   finishedAt: number | null; // server timestamp when this player finished current round
   jokersRemaining?: number;
+  isBot?: boolean;
 }
 
 export interface RoundSummary {
@@ -118,6 +119,8 @@ export type WebSocketClientMessage =
   | { type: 'TOGGLE_READY'; roomCode: string; playerId: string; isReady: boolean }
   | { type: 'UPDATE_SETTINGS'; roomCode: string; playerId: string; settings: Partial<GameSettings> }
   | { type: 'START_MATCH'; roomCode: string; playerId: string }
+  | { type: 'ADD_BOT'; roomCode: string; botName?: string }
+  | { type: 'REMOVE_BOT'; roomCode: string; botId?: string }
   | { type: 'SUBMIT_GUESS'; roomCode: string; playerId: string; roundNumber: number; guess: string; clientActionId: string }
   | { type: 'USE_JOKER'; roomCode: string; playerId: string; roundNumber: number }
   | { type: 'RECONNECT'; roomCode: string; playerId: string; sessionToken: string }

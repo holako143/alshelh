@@ -11,23 +11,27 @@ export interface ValidationResult {
 
 /**
  * Validates a word for gameplay:
- * 1. Checks length matches GAME_CONFIG.wordLength (5)
+ * 1. Checks length matches expectedLength (defaults to GAME_CONFIG.wordLength = 5)
  * 2. Checks characters are valid Arabic letters
  * 3. Normalizes diacritics / alefs
- * 4. Supports any 5-letter Arabic word to allow user experimentation with letter colors
+ * 4. Supports any valid-length Arabic word to allow user experimentation with letter colors
  */
-export function validateGuessWord(word: string, requireDictionary: boolean = false): ValidationResult {
+export function validateGuessWord(
+  word: string,
+  requireDictionary: boolean = false,
+  expectedLength: number = GAME_CONFIG.wordLength
+): ValidationResult {
   if (!word) {
     return { isValid: false, normalizedWord: '', errorMessage: 'الرجاء إدخال الكلمة' };
   }
 
   const normalized = normalizeArabic(word);
 
-  if (normalized.length !== GAME_CONFIG.wordLength) {
+  if (normalized.length !== expectedLength) {
     return {
       isValid: false,
       normalizedWord: normalized,
-      errorMessage: `يجب أن تتكون الكلمة من ${GAME_CONFIG.wordLength} أحرف تماماً`,
+      errorMessage: `يجب أن تتكون الكلمة من ${expectedLength} أحرف تماماً`,
     };
   }
 

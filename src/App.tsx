@@ -150,13 +150,13 @@ export default function App() {
       // Extract any invite parameters if joined via link
       const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
       const hostName = params?.get('host') || 'المستضيف';
-      const rounds = parseInt(params?.get('r') || params?.get('rounds') || '5', 10);
-      const timeSecs = parseInt(params?.get('t') || params?.get('time') || '60', 10);
+      const rounds = parseInt(params?.get('r') || params?.get('rounds') || '1', 10);
+      const timeSecs = parseInt(params?.get('t') || params?.get('time') || '180', 10);
       const theme = params?.get('th') || params?.get('theme') || 'ALL';
 
       const inviteSettings: Partial<GameSettings> = {
-        totalRounds: isNaN(rounds) ? 5 : rounds,
-        roundDurationSeconds: isNaN(timeSecs) ? 60 : timeSecs,
+        totalRounds: isNaN(rounds) ? 1 : rounds,
+        roundDurationSeconds: isNaN(timeSecs) ? 180 : timeSecs,
         themeCategory: theme,
       };
 

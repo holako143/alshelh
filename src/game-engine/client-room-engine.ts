@@ -434,11 +434,13 @@ export class ClientRoomEngine {
 
   public startMatch(roomCode: string, hostPlayerId: string): boolean {
     const room = this.rooms.get(roomCode.trim().toUpperCase());
-    if (!room || room.hostPlayerId !== hostPlayerId) return false;
+    if (!room) return false;
     if (room.status !== 'WAITING' && room.status !== 'READY_CHECK' && room.status !== 'COUNTDOWN') return false;
 
     const connectedPlayers = Object.values(room.players).filter((p) => p.isConnected);
-    if (connectedPlayers.length < 2) return false;
+    if (connectedPlayers.length < 2) {
+      this.addBot(roomCode, 'الذكي 🤖');
+    }
 
     // Direct immediate start! No delay!
     this.startNextRound(room);
@@ -800,7 +802,7 @@ export class ClientRoomEngine {
       serverTimestamp: now,
     });
 
-    const isFinalRound = room.currentRound >= room.settings.totalRounds;
+    const isFinalRound = room.currentRound >= (room.settings.totalRounds || 1);
 
     setTimeout(() => {
       if (room.status === 'ROUND_ENDING') {

@@ -246,6 +246,18 @@ async function startServer() {
             break;
           }
 
+          case 'ADD_BOT': {
+            const { roomCode, botName } = message;
+            roomManager.addBot(roomCode, botName);
+            break;
+          }
+
+          case 'REMOVE_BOT': {
+            const { roomCode, botId } = message;
+            roomManager.removeBot(roomCode, botId);
+            break;
+          }
+
           default:
             break;
         }

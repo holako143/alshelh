@@ -607,13 +607,25 @@ export function useMultiplayerSocket(
 
   const addBot = useCallback((botName?: string) => {
     if (!roomCode) return false;
-    return clientRoomEngine.addBot(roomCode, botName);
-  }, [roomCode]);
+    clientRoomEngine.addBot(roomCode, botName);
+    send({
+      type: 'ADD_BOT',
+      roomCode,
+      botName: botName || 'الذكي 🤖',
+    });
+    return true;
+  }, [roomCode, send]);
 
   const removeBot = useCallback((botId?: string) => {
     if (!roomCode) return false;
-    return clientRoomEngine.removeBot(roomCode, botId);
-  }, [roomCode]);
+    clientRoomEngine.removeBot(roomCode, botId);
+    send({
+      type: 'REMOVE_BOT',
+      roomCode,
+      botId,
+    });
+    return true;
+  }, [roomCode, send]);
 
   return {
     roomState,

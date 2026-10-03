@@ -1081,15 +1081,38 @@ export function getRandomWordClue(): WordClueItem {
   return CURATED_WORDS_WITH_HINTS[index];
 }
 
+import { TRAINING_WORDS } from './training-dataset';
+
+const TRAINING_WORDS_SET = new Set(TRAINING_WORDS.map((item) => item.word));
+const TRAINING_WORDS_MAP = new Map(TRAINING_WORDS.map((item) => [item.word, item]));
+
 export function getHintForWord(word: string): WordHint {
   const hint = WORD_HINTS_MAP.get(word);
   if (hint) return hint;
+
+  const trainingItem = TRAINING_WORDS_MAP.get(word);
+  if (trainingItem) {
+    const firstLetter = word ? word[0] : '';
+    const lastLetter = word && word.length > 0 ? word[word.length - 1] : '';
+    return {
+      category: trainingItem.category,
+      hint: trainingItem.hint,
+      dictionaryMeaning: trainingItem.dictionaryMeaning || trainingItem.hint,
+      icon: trainingItem.icon,
+      firstLetter,
+      lastLetter,
+      level2Hint: `تبدأ بحرف "${firstLetter}" وتنتمي لمجال ${trainingItem.category}`,
+      level3Hint: `تبدأ بحرف "${firstLetter}" وتنتهي بحرف "${lastLetter}" (${trainingItem.hint})`,
+    };
+  }
+
   const firstLetter = word ? word[0] : '';
   const lastLetter = word && word.length > 0 ? word[word.length - 1] : '';
+  const wLen = word ? word.length : 5;
   return {
     category: 'كلمات ومعاجم عربية',
-    hint: `كلمة فصيحة مكوّنة من 5 أحرف تبدأ بحرف "${firstLetter}" وتنتهي بـ "${lastLetter}"`,
-    dictionaryMeaning: `لفظة عربية صحيحة تتألف من 5 أحرف تبدأ بحرف (${firstLetter}) وتختم بحرف (${lastLetter}).`,
+    hint: `كلمة فصيحة مكوّنة من ${wLen} أحرف تبدأ بحرف "${firstLetter}" وتنتهي بـ "${lastLetter}"`,
+    dictionaryMeaning: `لفظة عربية صحيحة تتألف من ${wLen} أحرف تبدأ بحرف (${firstLetter}) وتختم بحرف (${lastLetter}).`,
     icon: '📖',
     firstLetter,
     lastLetter,
@@ -1098,7 +1121,9 @@ export function getHintForWord(word: string): WordHint {
   };
 }
 
-export function isValidArabicWord(word: string): boolean {
-  if (!word || word.length !== 5) return false;
-  return VALID_GUESSES_SET.has(word) || TARGET_SET.has(word);
+export function isValidArabicWord(word: string, expectedLength?: number): boolean {
+  if (!word) return false;
+  if (expectedLength && word.length !== expectedLength) return false;
+  if (!expectedLength && word.length !== 5 && !TRAINING_WORDS_SET.has(word)) return false;
+  return VALID_GUESSES_SET.has(word) || TARGET_SET.has(word) || TRAINING_WORDS_SET.has(word);
 }

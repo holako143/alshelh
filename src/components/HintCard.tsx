@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { WordHint } from '../shared/types';
-import { Lightbulb, Sparkles, RefreshCw, X, Tag, Lock, Unlock, BookOpen, Compass, Zap } from 'lucide-react';
+import { DifficultyLevel, DIFFICULTY_LABELS } from '../game-engine/training-dataset';
+import { Lightbulb, Sparkles, RefreshCw, X, Tag, Lock, Unlock, BookOpen, Compass, Zap, Copy, Check, Eye } from 'lucide-react';
 import { soundManager } from '../lib/audio';
 
 interface HintCardProps {
@@ -13,6 +14,13 @@ interface HintCardProps {
   isOpenControlled?: boolean;
   onToggleControlled?: (open: boolean) => void;
   showTriggerButton?: boolean;
+  wordLength?: number;
+  difficulty?: DifficultyLevel;
+  targetWord?: string;
+  onRevealAnswer?: () => void;
+  onCopyHintOnly?: () => void;
+  onCopyHintWithHelpers?: () => void;
+  onCopyHintWithAnswer?: () => void;
 }
 
 export const HintCard: React.FC<HintCardProps> = ({
@@ -25,9 +33,17 @@ export const HintCard: React.FC<HintCardProps> = ({
   isOpenControlled,
   onToggleControlled,
   showTriggerButton = true,
+  wordLength,
+  difficulty,
+  targetWord,
+  onRevealAnswer,
+  onCopyHintOnly,
+  onCopyHintWithHelpers,
+  onCopyHintWithAnswer,
 }) => {
   const [internalIsOpen, setInternalIsOpen] = useState<boolean>(initialExpanded);
   const [unlockedLevel, setUnlockedLevel] = useState<number>(1);
+  const [copiedAction, setCopiedAction] = useState<string | null>(null);
 
   const isControlled = isOpenControlled !== undefined;
   const isOpen = isControlled ? isOpenControlled : internalIsOpen;
@@ -41,6 +57,14 @@ export const HintCard: React.FC<HintCardProps> = ({
     } else {
       setInternalIsOpen(val);
     }
+  };
+
+  const handleCopy = (type: 'hint' | 'helpers' | 'answer', callback?: () => void) => {
+    if (callback) {
+      callback();
+    }
+    setCopiedAction(type);
+    setTimeout(() => setCopiedAction(null), 2500);
   };
 
   // Close on Escape key
@@ -165,13 +189,18 @@ export const HintCard: React.FC<HintCardProps> = ({
                   <Compass className="w-4 h-4" />
                   <span>المعنى في المعجم والقاموس العربي:</span>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="inline-flex items-center gap-1 rounded-lg bg-amber-400/20 px-2 py-0.5 text-xs font-bold text-amber-200 border border-amber-400/30">
                     <span>{hint.icon || '🏷️'}</span>
                     <span>المجال: {hint.category}</span>
                   </span>
+                  {difficulty && DIFFICULTY_LABELS[difficulty] && (
+                    <span className="px-2 py-0.5 rounded-lg bg-purple-500/20 text-purple-200 border border-purple-400/30 text-xs font-bold">
+                      {DIFFICULTY_LABELS[difficulty].badge}
+                    </span>
+                  )}
                   <span className="px-2 py-0.5 rounded-lg bg-white/10 text-white/80 text-xs font-mono font-bold">
-                    5 أحرف
+                    {wordLength || 5} أحرف
                   </span>
                 </div>
               </div>
@@ -187,6 +216,77 @@ export const HintCard: React.FC<HintCardProps> = ({
                 <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span>استعن بهذا التعريف لمعرفة دلالة الكلمة وتخمين حروفها في اللوحة.</span>
               </div>
+            </div>
+
+            {/* Quick Copy & Reveal Actions Bar */}
+            <div className="flex flex-col gap-1.5 p-3 rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-md">
+              <div className="flex items-center justify-between text-xs font-bold text-white/70">
+                <span className="flex items-center gap-1">
+                  <Copy className="w-3.5 h-3.5 text-teal-400" />
+                  <span>خيارات النسخ والمشاركة:</span>
+                </span>
+                {copiedAction && (
+                  <span className="text-[11px] text-emerald-300 font-bold flex items-center gap-1 animate-in fade-in">
+                    <Check className="w-3 h-3 text-emerald-400" />
+                    <span>تم النسخ للحافظة بنجاح!</span>
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                {onCopyHintOnly && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopy('hint', onCopyHintOnly)}
+                    className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-white/90 font-bold text-xs cursor-pointer transition-all active:scale-95"
+                    title="نسخ التلميح والمجال والمعنى فقط"
+                  >
+                    <Copy className="w-3 h-3 text-amber-300" />
+                    <span>نسخ التلميح</span>
+                  </button>
+                )}
+
+                {onCopyHintWithHelpers && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopy('helpers', onCopyHintWithHelpers)}
+                    className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-teal-500/15 hover:bg-teal-500/25 border border-teal-400/30 text-teal-200 font-bold text-xs cursor-pointer transition-all active:scale-95"
+                    title="نسخ التلميح مع الحرف الأول والأخير وعدد الحروف"
+                  >
+                    <Sparkles className="w-3 h-3 text-teal-300" />
+                    <span>نسخ + الحروف المساعدة</span>
+                  </button>
+                )}
+
+                {onCopyHintWithAnswer && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopy('answer', onCopyHintWithAnswer)}
+                    className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-400/30 text-purple-200 font-bold text-xs cursor-pointer transition-all active:scale-95"
+                    title="نسخ التلميح مع الإجابة والحل الكامل"
+                  >
+                    <Check className="w-3 h-3 text-purple-300" />
+                    <span>نسخ + الإجابة</span>
+                  </button>
+                )}
+              </div>
+
+              {onRevealAnswer && (
+                <div className="pt-1 border-t border-white/10 mt-1 flex items-center justify-between">
+                  <span className="text-[11px] text-white/50">هل استعصت عليك الكلمة وتريد معرفة الحل؟</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onRevealAnswer();
+                      setIsOpen(false);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/40 text-rose-300 hover:text-white text-xs font-bold cursor-pointer transition-all active:scale-95"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>كشف الإجابة</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Progressive Competitive Letters Clues */}
