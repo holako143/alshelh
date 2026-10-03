@@ -236,7 +236,7 @@ export default function App() {
       )}
 
       {view === 'singleplayer' && (
-        <div className="flex flex-col h-[100dvh] max-h-[100dvh] overflow-hidden relative z-10">
+        <div className="flex flex-col h-[100dvh] max-h-[100dvh] relative z-10 overflow-hidden">
           <GameHeader
             getServerNow={getServerNow}
             onLeave={() => setView('lobby')}
@@ -246,7 +246,7 @@ export default function App() {
             colorBlindMode={colorBlindMode}
             onToggleColorBlind={handleToggleColorBlind}
           />
-          <main className="flex-1 flex flex-col p-1 sm:p-2 relative z-10 overflow-hidden">
+          <main className="flex-1 flex flex-col min-h-0 overflow-y-auto overscroll-contain relative z-10">
             <SinglePlayerGame
               onBackToLobby={() => setView('lobby')}
               colorBlindMode={colorBlindMode}
