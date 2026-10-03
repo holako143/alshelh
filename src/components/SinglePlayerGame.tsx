@@ -582,15 +582,25 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-1.5 font-bold text-amber-300">
               <span>{currentHint.icon || '🏷️'}</span>
-              <span>تلميح المعنى ({currentHint.category}):</span>
+              <span>تلميح اللغز ({currentHint.category}):</span>
             </div>
             <span className="text-[11px] text-white/50 font-mono">
               محاولة {guesses.length} / 8
             </span>
           </div>
           <p className="text-sm font-bold text-amber-100/95 leading-relaxed bg-black/30 p-2.5 rounded-xl border border-amber-400/20">
-            "{currentHint.dictionaryMeaning || currentHint.hint}"
+            "{currentHint.hint}"
           </p>
+          <div className="flex items-center justify-between text-[11px] text-white/50 pt-0.5">
+            <span>✨ لغز تقريبي يقرب المعنى دون حرق الكلمة؛ استعن بالحروف للتأكيد!</span>
+            <button
+              type="button"
+              onClick={() => setIsHintModalOpen(true)}
+              className="text-amber-300 hover:text-amber-200 underline font-bold cursor-pointer"
+            >
+              مساعدات الحروف 💡
+            </button>
+          </div>
         </div>
       )}
 

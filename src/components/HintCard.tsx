@@ -86,7 +86,8 @@ export const HintCard: React.FC<HintCardProps> = ({
   const autoLevel = attemptsCount >= 4 ? 3 : attemptsCount >= 2 ? 2 : 1;
   const currentLevel = Math.max(unlockedLevel, autoLevel);
 
-  const meaningText = hint.dictionaryMeaning || hint.hint;
+  // During active guessing, NEVER spoil the word! Use hint.hint which is purely descriptive.
+  const clueText = hint.hint;
 
   return (
     <>
@@ -104,13 +105,13 @@ export const HintCard: React.FC<HintCardProps> = ({
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-400/30 text-amber-300 text-xs ring-1 ring-amber-400/50 group-hover:rotate-12 transition-transform">
               <BookOpen className="w-3 h-3 text-amber-200" />
             </span>
-            <span className="font-extrabold tracking-tight">تلميح القاموس: معنى الكلمة</span>
+            <span className="font-extrabold tracking-tight">تلميح اللغز: تقريب المعنى</span>
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold text-amber-300 border border-amber-400/30">
               <Tag className="h-2.5 w-2.5" />
               {hint.category}
             </span>
             <span className="text-[10px] bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 px-1.5 py-0.5 rounded-full font-bold">
-              مساعدة تنافسية
+              تلميح ذكي
             </span>
           </button>
         </div>
@@ -140,15 +141,15 @@ export const HintCard: React.FC<HintCardProps> = ({
                 <div className="flex flex-col text-right">
                   <div className="flex items-center gap-2">
                     <span className="text-base font-black text-amber-300">
-                      معجم الكلمات وتلميح المعنى
+                      لغز الكلمة وتلميح التقريب
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-300 border border-emerald-400/30">
                       <Zap className="h-3 w-3" />
-                      مساعدة تنافسية
+                      تلميح ذكي
                     </span>
                   </div>
                   <span className="text-[11px] text-white/60">
-                    تعريف لغوي مبسط من القاموس لمساعدتك في استنتاج الكلمة
+                    تلميح لغوي وفكري يقرب لك المعنى دون كشف الإجابة، استعن به لتخمين الحروف
                   </span>
                 </div>
               </div>
@@ -187,7 +188,7 @@ export const HintCard: React.FC<HintCardProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
                   <Compass className="w-4 h-4" />
-                  <span>المعنى في المعجم والقاموس العربي:</span>
+                  <span>تلميح اللغز الذكي (يقرب المعنى دون حرق الكلمة):</span>
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="inline-flex items-center gap-1 rounded-lg bg-amber-400/20 px-2 py-0.5 text-xs font-bold text-amber-200 border border-amber-400/30">
@@ -208,13 +209,13 @@ export const HintCard: React.FC<HintCardProps> = ({
               {/* The Dictionary Definition Quote Box */}
               <div className="p-3.5 rounded-xl bg-black/40 border border-amber-400/20 shadow-inner">
                 <p className="text-sm sm:text-base font-bold leading-relaxed text-amber-100/95 tracking-wide">
-                  "{meaningText}"
+                  "{clueText}"
                 </p>
               </div>
 
               <div className="text-[11px] text-white/50 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span>استعن بهذا التعريف لمعرفة دلالة الكلمة وتخمين حروفها في اللوحة.</span>
+                <span>لغز دلالي وتلميح فكري يقرب الحل، استعن به وبكشف الحروف المساعدة لمعرفة الكلمة.</span>
               </div>
             </div>
 
@@ -361,7 +362,7 @@ export const HintCard: React.FC<HintCardProps> = ({
                   <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-xs font-bold text-emerald-200 animate-in fade-in">
                     <div className="flex items-center gap-2">
                       <Lightbulb className="w-4 h-4 text-emerald-300" />
-                      <span>الحرف الأخير من الكلمة هو: <strong className="text-white text-sm bg-emerald-600/50 px-2 py-0.5 rounded-md">"{hint.lastLetter || hint.hint.slice(-1)}"</strong></span>
+                      <span>الحرف الأخير من الكلمة هو: <strong className="text-white text-sm bg-emerald-600/50 px-2 py-0.5 rounded-md">"{hint.lastLetter || (targetWord ? targetWord[targetWord.length - 1] : '')}"</strong></span>
                     </div>
                     <span className="text-[10px] text-emerald-300/80">تلميح الحسم</span>
                   </div>
